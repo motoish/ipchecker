@@ -1,0 +1,25 @@
+menu.set_expected: 设置期望 IP…
+menu.use_current: 设为当前公网 IP
+menu.interval: 检查间隔
+menu.minutes: "%{minutes} 分钟"
+menu.check_now: 立即检查
+menu.mute_session: 本会话不再提醒
+menu.about: 关于 ipchecker…
+menu.quit: 退出
+status.current_ip: "当前公网 IP：%{ip}"
+status.expected_ip: "期望 IP：%{ip}"
+status.unknown: 未知
+status.unset: 未设置
+status.tooltip: "当前: %{current} | 期望: %{expected}"
+dialog.set_expected_title: 设置期望 IP
+dialog.save: 保存
+dialog.cancel: 取消
+dialog.invalid_ipv4: 请输入有效的 IPv4 地址
+dialog.about_ok: 好
+dialog.about_body: "版本 %{version}\n监控公网 IPv4 的 macOS 菜单栏应用。"
+notify.mismatch_title: 公网 IP 与期望不符
+notify.mismatch_body: "当前 %{current}，期望 %{expected}"
+notify.fetch_failure_title: 无法获取公网 IP
+notify.continue: 继续提醒
+notify.mute_session: 本会话不再提醒
+status.current_ip_copied: 已复制当前公网 IP

@@ -1,0 +1,25 @@
+menu.set_expected: Set Expected IP…
+menu.use_current: Use Current Public IP
+menu.interval: Check Interval
+menu.minutes: "%{minutes} min"
+menu.check_now: Check Now
+menu.mute_session: Mute for This Session
+menu.about: About ipchecker…
+menu.quit: Quit
+status.current_ip: "Current public IP: %{ip}"
+status.expected_ip: "Expected IP: %{ip}"
+status.unknown: Unknown
+status.unset: Not set
+status.tooltip: "Current: %{current} | Expected: %{expected}"
+dialog.set_expected_title: Set Expected IP
+dialog.save: Save
+dialog.cancel: Cancel
+dialog.invalid_ipv4: Please enter a valid IPv4 address
+dialog.about_ok: OK
+dialog.about_body: "Version %{version}\nA macOS menu bar app that watches your public IPv4."
+notify.mismatch_title: Public IP does not match expected
+notify.mismatch_body: "Current %{current}, expected %{expected}"
+notify.fetch_failure_title: Unable to get public IP
+notify.continue: Keep Notifying
+notify.mute_session: Mute for This Session
+status.current_ip_copied: Copied current public IP

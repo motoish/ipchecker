@@ -1,0 +1,25 @@
+menu.set_expected: 期待IPを設定…
+menu.use_current: 現在のグローバルIPを使用
+menu.interval: 確認間隔
+menu.minutes: "%{minutes} 分"
+menu.check_now: 今すぐ確認
+menu.mute_session: このセッションでは通知しない
+menu.about: ipcheckerについて…
+menu.quit: 終了
+status.current_ip: "現在のグローバルIP：%{ip}"
+status.expected_ip: "期待IP：%{ip}"
+status.unknown: 不明
+status.unset: 未設定
+status.tooltip: "現在: %{current} | 期待: %{expected}"
+dialog.set_expected_title: 期待IPを設定
+dialog.save: 保存
+dialog.cancel: キャンセル
+dialog.invalid_ipv4: 有効なIPv4アドレスを入力してください
+dialog.about_ok: OK
+dialog.about_body: "バージョン %{version}\nグローバルIPv4を監視するmacOSメニューバーアプリ。"
+notify.mismatch_title: グローバルIPが期待と一致しません
+notify.mismatch_body: "現在 %{current}、期待 %{expected}"
+notify.fetch_failure_title: グローバルIPを取得できません
+notify.continue: 通知を続ける
+notify.mute_session: このセッションでは通知しない
+status.current_ip_copied: 現在のグローバルIPをコピーしました

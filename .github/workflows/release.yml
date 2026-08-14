@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag name including the v prefix (for example v0.2.1)
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag name including the v prefix (for example v0.2.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve release tag
+        id: meta
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify tag matches Cargo.toml version
+        run: |
+          set -euo pipefail
+          tag="${{ steps.meta.outputs.tag }}"
+          tag="${tag#v}"
+          cargo_version="$(python3 -c 'import re; t=open("Cargo.toml",encoding="utf-8").read(); m=re.search(r"(?m)^version\\s*=\\s*\"([^\"]+)\"", t); assert m; print(m.group(1))')"
+          if [[ "$tag" != "$cargo_version" ]]; then
+            echo "Tag v$tag does not match Cargo.toml version $cargo_version" >&2
+            echo "Run the Bump version workflow (or ./scripts/bump-version.sh) before tagging." >&2
+            exit 1
+          fi
+
+      - name: Generate release notes
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGES.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          body_path: CHANGES.md
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update CHANGELOG.md on main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git switch -C main origin/main
+
+      - name: Generate CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Commit and push CHANGELOG.md
+        run: |
+          set -euo pipefail
+          git add CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "CHANGELOG.md already up to date"
+            exit 0
+          fi
+          git commit -m "chore(release): update CHANGELOG.md for ${{ steps.meta.outputs.tag }}"
+          git push origin main
