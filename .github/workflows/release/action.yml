@@ -1,0 +1,49 @@
+name: Release
+description: Create the GitHub Release and update CHANGELOG.md
+
+inputs:
+  tag:
+    description: Git tag including the v prefix
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Generate release notes
+      uses: orhun/git-cliff-action@v4
+      with:
+        config: cliff.toml
+        args: --latest --strip header
+      env:
+        OUTPUT: CHANGES.md
+        GITHUB_REPO: ${{ github.repository }}
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v3
+      with:
+        tag_name: ${{ inputs.tag }}
+        name: ${{ inputs.tag }}
+        body_path: CHANGES.md
+        generate_release_notes: false
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Generate CHANGELOG.md
+      uses: orhun/git-cliff-action@v4
+      with:
+        config: cliff.toml
+      env:
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
+
+    - name: Commit and push CHANGELOG.md
+      shell: bash
+      run: |
+        set -euo pipefail
+        git add CHANGELOG.md
+        if git diff --staged --quiet; then
+          echo "CHANGELOG.md already up to date"
+          exit 0
+        fi
+        git commit -m "chore(release): update CHANGELOG.md for ${{ inputs.tag }} [skip ci]"
+        git push origin HEAD:main

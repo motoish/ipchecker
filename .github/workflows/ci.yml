@@ -38,7 +38,22 @@ jobs:
     name: Release
     needs: check
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message || '', 'chore(release):') }}
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    uses: ./.github/workflows/release.yml
-    secrets: inherit
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Bump version
+        id: bump
+        uses: ./.github/workflows/bump-version
+
+      - name: Release
+        uses: ./.github/workflows/release
+        with:
+          tag: ${{ steps.bump.outputs.tag }}
