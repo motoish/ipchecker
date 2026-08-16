@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.8.16-47063234
+
+### Bug Fixes
+
+- Remove script directory by @motoish
+
+### Documentation
+
+- Modify README.md by @motoish
+
 ## 2026.8.16-e727b24e
 
 ### Bug Fixes
