@@ -5,10 +5,9 @@
 # Also syncs resources/Info.plist marketing + build numbers.
 # About UI already reads env!("CARGO_PKG_VERSION") — no locale edits needed.
 #
-# Releases use CalVer as Cargo-compatible `YYYY.M.D` (no leading zeros),
-# for example 2026.8.16. The calendar day is Asia/Tokyo.
-# A later push on the same day becomes `YYYY.M.D-<sha8>` because Cargo
-# versions cannot contain `_`.
+# Releases use CalVer as Cargo-compatible `YYYY.M.D-<sha8>` (no leading zeros),
+# for example 2026.8.16-a1b2c3d4. The calendar day is Asia/Tokyo. Cargo
+# versions cannot contain `_`, so the hash is separated with `-`.
 #
 # Usage:
 #   ./scripts/bump-version.sh
@@ -59,14 +58,6 @@ def git_head_sha() -> str:
     ).strip()
 
 
-def git_tag_exists(tag: str) -> bool:
-    listed = subprocess.check_output(
-        ["git", "tag", "-l", tag],
-        text=True,
-    ).strip()
-    return listed == tag
-
-
 def prerelease_sha(sha: str) -> str:
     sha8 = sha[:8].lower()
     if not re.fullmatch(r"[0-9a-f]{8}", sha8):
@@ -76,11 +67,7 @@ def prerelease_sha(sha: str) -> str:
     return sha8
 
 
-today = today_calver()
-if git_tag_exists(f"v{today}"):
-    version = f"{today}-{prerelease_sha(git_head_sha())}"
-else:
-    version = today
+version = f"{today_calver()}-{prerelease_sha(git_head_sha())}"
 
 if version == current:
     raise SystemExit(f"already at version {current}")
