@@ -18,7 +18,7 @@
 Requires macOS 13+, stable Rust, and Xcode Command Line Tools.
 
 ```bash
-./script/build_and_run.sh
+./scripts/build_and_run.sh
 ```
 
 The signed local app is created at `target/release/bundle/ipchecker.app`.
@@ -59,10 +59,10 @@ bash scripts/bundle-local.sh
 Useful run modes:
 
 ```bash
-./script/build_and_run.sh --verify
-./script/build_and_run.sh --logs
-./script/build_and_run.sh --telemetry
-./script/build_and_run.sh --debug
+./scripts/build_and_run.sh --verify
+./scripts/build_and_run.sh --logs
+./scripts/build_and_run.sh --telemetry
+./scripts/build_and_run.sh --debug
 ```
 
 ## Releasing
