@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026.8.16-6198b524
+### Bug Fixes
+
+- Modify bump version shell by @motoish
+
+
+### Documentation
+
+- Modify README.md by @motoish
+
+
+### Miscellaneous Tasks
+
+- Refactor workflow by @motoish
+
+
 ## 2026.8.16-ef2b65f5
 ### Documentation
 
