@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.8.17-6976b436
+
+### Bug Fixes
+
+- Change net_speed calculation by @motoish
+- Optimization by @motoish
+
 ## 2026.8.17-3a71b9f3
 
 ### Documentation
