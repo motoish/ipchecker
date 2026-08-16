@@ -136,5 +136,5 @@ if github_output:
     with open(github_output, "a", encoding="utf-8") as handle:
         handle.write(f"version={version}\n")
         handle.write(f"tag=v{version}\n")
-        handle.write(f"stable_tag=v{today_calver()}\n")
+        handle.write(f"stable_tag=v{stable}\n")
 PY
