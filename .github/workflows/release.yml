@@ -1,69 +1,59 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Tag name including the v prefix (for example v2026.8.16)
-        required: true
-        type: string
   workflow_call:
-    inputs:
-      tag:
-        description: Tag name including the v prefix (for example v2026.8.16)
-        required: true
-        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
   release:
-    name: Create GitHub Release
+    name: Bump, tag, and release
     runs-on: ubuntu-latest
 
     steps:
-      - name: Resolve release tag
-        id: meta
-        run: |
-          set -euo pipefail
-          if [[ -n "${{ inputs.tag }}" ]]; then
-            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout repository
+      - name: Checkout main
         uses: actions/checkout@v7
         with:
-          ref: ${{ steps.meta.outputs.tag }}
           fetch-depth: 0
+          fetch-tags: true
 
-      - name: Verify tag matches Cargo.toml version
+      - name: Fetch tags
+        run: git fetch --force --tags origin
+
+      - name: Bump version files
+        id: bump
+        run: ./scripts/bump-version.sh
+
+      - name: Commit version bump
         run: |
           set -euo pipefail
-          tag="${{ steps.meta.outputs.tag }}"
-          tag="${tag#v}"
-          cargo_version="$(grep -E '^version[[:space:]]*=' Cargo.toml | head -n1 | sed -E 's/^version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/')"
-          if [[ -z "$cargo_version" ]]; then
-            echo "version not found in Cargo.toml" >&2
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml resources/Info.plist
+          if git diff --staged --quiet; then
+            echo "No version file changes; refusing to tag" >&2
             exit 1
           fi
-          if [[ "$tag" != "$cargo_version" ]]; then
-            echo "Tag v$tag does not match Cargo.toml version $cargo_version" >&2
-            echo "Push to main so the release workflow can bump and tag first." >&2
+          git commit -m "chore(release): bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git push origin HEAD:main
+
+      - name: Create and push tag
+        run: |
+          set -euo pipefail
+          tag="${{ steps.bump.outputs.tag }}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists" >&2
             exit 1
           fi
+          git tag "$tag"
+          git push origin "$tag"
 
       - name: Generate release notes
-        id: cliff
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
@@ -75,20 +65,12 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.tag }}
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: ${{ steps.bump.outputs.tag }}
           body_path: CHANGES.md
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update CHANGELOG.md on main
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git switch -C main origin/main
 
       - name: Generate CHANGELOG.md
         uses: orhun/git-cliff-action@v4
@@ -106,5 +88,5 @@ jobs:
             echo "CHANGELOG.md already up to date"
             exit 0
           fi
-          git commit -m "chore(release): update CHANGELOG.md for ${{ steps.meta.outputs.tag }} [skip ci]"
-          git push origin main
+          git commit -m "chore(release): update CHANGELOG.md for ${{ steps.bump.outputs.tag }} [skip ci]"
+          git push origin HEAD:main
