@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026.8.16-8a1e170f
+### Bug Fixes
+
+- Modify bump version shell by @motoish
+
+
+### Miscellaneous Tasks
+
+- Modify commit version bump by @motoish
+
+
 ## 2026.8.16-1716a7fb
 ### Bug Fixes
 
