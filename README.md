@@ -67,7 +67,7 @@ Useful run modes:
 
 ## Releasing
 
-Push to `main` creates a GitHub Release. One push is one release, using the last commit.
+Push to `main` runs format, Clippy, and tests first. Only if those pass does it create a GitHub Release. One push is one release, using the last commit.
 
 - First release of the day is `YYYY.M.D` in Asia/Tokyo, for example `2026.8.16`
 - A later push on the same day is `YYYY.M.D-<sha8>`, for example `2026.8.16-a1b2c3d4` (Cargo versions cannot use `_`)
