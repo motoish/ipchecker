@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026.8.17-3a71b9f3
+
+### Documentation
+
+- Modify bundle-local by @motoish
+
+### Miscellaneous Tasks
+
+- Add bundle app step by @motoish
+- Modify quick start by @motoish
+
 ## 2026.8.17-15f3bd29
 
 ### Documentation
