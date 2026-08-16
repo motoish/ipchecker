@@ -2,7 +2,7 @@
 # Bump the app version in every place that defines it.
 #
 # Single source of truth after bump: Cargo.toml `version`.
-# Also syncs resources/Info.plist marketing + build numbers.
+# Also syncs Cargo.lock and resources/Info.plist marketing + build numbers.
 # About UI already reads env!("CARGO_PKG_VERSION") — no locale edits needed.
 #
 # Releases use CalVer as Cargo-compatible `YYYY.M.D-<sha8>` (no leading zeros),
@@ -15,6 +15,7 @@ set -euo pipefail
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cargo_toml="$repo_dir/Cargo.toml"
+cargo_lock="$repo_dir/Cargo.lock"
 info_plist="$repo_dir/resources/Info.plist"
 
 if [[ $# -ne 0 ]]; then
@@ -22,7 +23,7 @@ if [[ $# -ne 0 ]]; then
   exit 2
 fi
 
-python3 - "$cargo_toml" "$info_plist" <<'PY'
+python3 - "$cargo_toml" "$cargo_lock" "$info_plist" <<'PY'
 from __future__ import annotations
 
 import os
@@ -34,7 +35,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 cargo_toml = Path(sys.argv[1])
-info_plist = Path(sys.argv[2])
+cargo_lock = Path(sys.argv[2])
+info_plist = Path(sys.argv[3])
 
 cargo = cargo_toml.read_text(encoding="utf-8")
 match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', cargo)
@@ -81,6 +83,17 @@ cargo_new, count = re.subn(
 if count != 1:
     raise SystemExit("failed to update Cargo.toml version")
 cargo_toml.write_text(cargo_new, encoding="utf-8")
+
+lock = cargo_lock.read_text(encoding="utf-8")
+lock_new, count = re.subn(
+    r'(?m)^(name = "ipchecker"\nversion = ")([^"]+)(")',
+    rf"\g<1>{version}\g<3>",
+    lock,
+    count=1,
+)
+if count != 1:
+    raise SystemExit("failed to update Cargo.lock version")
+cargo_lock.write_text(lock_new, encoding="utf-8")
 
 plist = info_plist.read_text(encoding="utf-8")
 plist, count = re.subn(
