@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
 use ipchecker::net_speed::{
-    InterfaceCounters, NetworkRates, NetworkSpeedLabels, NetworkSpeedSampler,
-    format_bytes_per_second, rates_from_counters, should_count_interface,
+    InterfaceCounters, InterfaceSnapshot, NetworkRates, NetworkSpeedLabels, NetworkSpeedSampler,
+    format_bytes_per_second, rates_from_snapshots, should_count_interface,
 };
 
 fn rate(number: &str, unit: &str) -> String {
@@ -11,6 +11,13 @@ fn rate(number: &str, unit: &str) -> String {
 
 fn counters(received: u64, sent: u64) -> InterfaceCounters {
     InterfaceCounters { received, sent }
+}
+
+fn snapshot<const N: usize>(entries: [(&str, u64, u64); N]) -> InterfaceSnapshot {
+    entries
+        .into_iter()
+        .map(|(name, received, sent)| (name.to_owned(), counters(received, sent)))
+        .collect()
 }
 
 #[test]
@@ -80,7 +87,9 @@ fn first_sample_stays_unknown_until_a_delta_exists() {
     let mut sampler = NetworkSpeedSampler::default();
     let now = Instant::now();
 
-    let first = sampler.observe(now, counters(1_000, 200)).clone();
+    let first = sampler
+        .observe(now, snapshot([("en0", 1_000, 200)]))
+        .clone();
 
     assert_eq!(first, NetworkSpeedLabels::unknown());
     assert_eq!(
@@ -93,10 +102,13 @@ fn first_sample_stays_unknown_until_a_delta_exists() {
 fn second_sample_reports_bytes_per_second() {
     let mut sampler = NetworkSpeedSampler::default();
     let start = Instant::now();
-    sampler.observe(start, counters(1_000, 200));
+    sampler.observe(start, snapshot([("en0", 1_000, 200)]));
 
     let labels = sampler
-        .observe(start + Duration::from_secs(1), counters(2_500, 700))
+        .observe(
+            start + Duration::from_secs(1),
+            snapshot([("en0", 2_500, 700)]),
+        )
         .clone();
 
     assert_eq!(labels.download, rate("1", "KB/s"));
@@ -109,9 +121,9 @@ fn second_sample_reports_bytes_per_second() {
 
 #[test]
 fn counter_wrap_reports_zero_rate_instead_of_a_spike() {
-    let rates = rates_from_counters(
-        counters(8_000, 4_000),
-        counters(100, 50),
+    let rates = rates_from_snapshots(
+        &snapshot([("en0", 8_000, 4_000)]),
+        &snapshot([("en0", 100, 50)]),
         Duration::from_secs(1),
     )
     .expect("elapsed time is positive");
@@ -124,8 +136,8 @@ fn counter_wrap_reports_zero_rate_instead_of_a_spike() {
 fn failed_read_keeps_the_last_rendered_frame() {
     let mut sampler = NetworkSpeedSampler::default();
     let start = Instant::now();
-    sampler.observe(start, counters(0, 0));
-    sampler.observe(start + Duration::from_secs(1), counters(1000, 0));
+    sampler.observe(start, snapshot([("en0", 0, 0)]));
+    sampler.observe(start + Duration::from_secs(1), snapshot([("en0", 1000, 0)]));
 
     let kept = sampler.observe_failure().clone();
 
@@ -137,20 +149,75 @@ fn failed_read_keeps_the_last_rendered_frame() {
 fn displayed_rate_averages_the_last_three_seconds() {
     let mut sampler = NetworkSpeedSampler::default();
     let start = Instant::now();
-    sampler.observe(start, counters(0, 0));
-    sampler.observe(start + Duration::from_secs(1), counters(3 * 1024, 0));
-    sampler.observe(start + Duration::from_secs(2), counters(3 * 1024, 0));
+    sampler.observe(start, snapshot([("en0", 0, 0)]));
+    sampler.observe(
+        start + Duration::from_secs(1),
+        snapshot([("en0", 3 * 1024, 0)]),
+    );
+    sampler.observe(
+        start + Duration::from_secs(2),
+        snapshot([("en0", 3 * 1024, 0)]),
+    );
     let labels = sampler
-        .observe(start + Duration::from_secs(3), counters(3 * 1024, 0))
+        .observe(
+            start + Duration::from_secs(3),
+            snapshot([("en0", 3 * 1024, 0)]),
+        )
         .clone();
 
     assert_eq!(labels.download, rate("1", "KB/s"));
     assert_eq!(labels.upload, rate("0", "KB/s"));
 }
 
+#[test]
+fn newly_active_interfaces_start_with_a_fresh_baseline() {
+    let rates = rates_from_snapshots(
+        &snapshot([("en0", 1_000, 200)]),
+        &snapshot([("en0", 2_024, 712), ("en1", 8_000_000, 4_000_000)]),
+        Duration::from_secs(1),
+    )
+    .expect("en0 exists in both snapshots");
+
+    assert_eq!(rates.download_bps, 1_024.0);
+    assert_eq!(rates.upload_bps, 512.0);
+}
+
+#[test]
+fn inactive_interfaces_are_removed_without_resetting_common_interfaces() {
+    let rates = rates_from_snapshots(
+        &snapshot([("en0", 1_000, 200), ("en1", 8_000_000, 4_000_000)]),
+        &snapshot([("en0", 2_024, 712)]),
+        Duration::from_secs(1),
+    )
+    .expect("en0 exists in both snapshots");
+
+    assert_eq!(rates.download_bps, 1_024.0);
+    assert_eq!(rates.upload_bps, 512.0);
+}
+
+#[test]
+fn a_complete_interface_switch_waits_for_a_new_delta() {
+    let mut sampler = NetworkSpeedSampler::default();
+    let start = Instant::now();
+    sampler.observe(start, snapshot([("en0", 0, 0)]));
+    sampler.observe(
+        start + Duration::from_secs(1),
+        snapshot([("en0", 2 * 1024, 1024)]),
+    );
+
+    let labels = sampler
+        .observe(
+            start + Duration::from_secs(2),
+            snapshot([("en1", 8_000_000, 4_000_000)]),
+        )
+        .clone();
+
+    assert_eq!(labels, NetworkSpeedLabels::unknown());
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn macos_interface_counters_can_be_read() {
-    ipchecker::net_speed::read_interface_counters()
+    ipchecker::net_speed::read_interface_snapshot()
         .expect("NET_RT_IFLIST2 should be readable on macOS");
 }

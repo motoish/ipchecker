@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "macos")]
@@ -15,6 +15,15 @@ const RATE_AVERAGE_SAMPLES: usize = 3;
 pub struct InterfaceCounters {
     pub received: u64,
     pub sent: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct InterfaceSnapshot(BTreeMap<String, InterfaceCounters>);
+
+impl FromIterator<(String, InterfaceCounters)> for InterfaceSnapshot {
+    fn from_iter<T: IntoIterator<Item = (String, InterfaceCounters)>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -51,7 +60,7 @@ impl NetworkSpeedLabels {
 
 #[derive(Debug, Default)]
 pub struct NetworkSpeedSampler {
-    previous: Option<(Instant, InterfaceCounters)>,
+    previous: Option<(Instant, InterfaceSnapshot)>,
     recent_rates: VecDeque<NetworkRates>,
     labels: NetworkSpeedLabels,
 }
@@ -63,22 +72,21 @@ impl Default for NetworkSpeedLabels {
 }
 
 impl NetworkSpeedSampler {
-    pub fn labels(&self) -> &NetworkSpeedLabels {
-        &self.labels
-    }
-
-    pub fn observe(&mut self, now: Instant, counters: InterfaceCounters) -> &NetworkSpeedLabels {
-        if let Some((previous_at, previous)) = self.previous {
-            let elapsed = now.saturating_duration_since(previous_at);
-            if let Some(rates) = rates_from_counters(previous, counters, elapsed) {
+    pub fn observe(&mut self, now: Instant, snapshot: InterfaceSnapshot) -> &NetworkSpeedLabels {
+        if let Some((previous_at, previous)) = &self.previous {
+            let elapsed = now.saturating_duration_since(*previous_at);
+            if let Some(rates) = rates_from_snapshots(previous, &snapshot, elapsed) {
                 self.recent_rates.push_back(rates);
                 while self.recent_rates.len() > RATE_AVERAGE_SAMPLES {
                     self.recent_rates.pop_front();
                 }
                 self.labels = NetworkSpeedLabels::from_rates(average_rates(&self.recent_rates));
+            } else {
+                self.recent_rates.clear();
+                self.labels = NetworkSpeedLabels::unknown();
             }
         }
-        self.previous = Some((now, counters));
+        self.previous = Some((now, snapshot));
         &self.labels
     }
 
@@ -97,26 +105,37 @@ pub fn should_count_interface(name: &str) -> bool {
     !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-pub fn rates_from_counters(
-    previous: InterfaceCounters,
-    current: InterfaceCounters,
+pub fn rates_from_snapshots(
+    previous: &InterfaceSnapshot,
+    current: &InterfaceSnapshot,
     elapsed: Duration,
 ) -> Option<NetworkRates> {
     let seconds = elapsed.as_secs_f64();
     if seconds <= 0.0 {
         return None;
     }
-    Some(NetworkRates {
-        download_bps: delta_per_second(previous.received, current.received, seconds),
-        upload_bps: delta_per_second(previous.sent, current.sent, seconds),
-    })
-}
 
-fn delta_per_second(previous: u64, current: u64, seconds: f64) -> f64 {
-    if current < previous {
-        return 0.0;
+    let mut common_interface_found = false;
+    let mut received_delta = 0u64;
+    let mut sent_delta = 0u64;
+    for (name, current_counters) in &current.0 {
+        let Some(previous_counters) = previous.0.get(name) else {
+            continue;
+        };
+        common_interface_found = true;
+        received_delta = received_delta.saturating_add(
+            current_counters
+                .received
+                .saturating_sub(previous_counters.received),
+        );
+        sent_delta =
+            sent_delta.saturating_add(current_counters.sent.saturating_sub(previous_counters.sent));
     }
-    (current - previous) as f64 / seconds
+
+    common_interface_found.then_some(NetworkRates {
+        download_bps: received_delta as f64 / seconds,
+        upload_bps: sent_delta as f64 / seconds,
+    })
 }
 
 fn average_rates(rates: &VecDeque<NetworkRates>) -> NetworkRates {
@@ -149,17 +168,17 @@ fn format_with_unit(number: &str, unit: &str) -> String {
 }
 
 #[cfg(target_os = "macos")]
-pub fn read_interface_counters() -> io::Result<InterfaceCounters> {
-    read_interface_counters_macos()
+pub fn read_interface_snapshot() -> io::Result<InterfaceSnapshot> {
+    read_interface_snapshot_macos()
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn read_interface_counters() -> Result<InterfaceCounters, String> {
+pub fn read_interface_snapshot() -> Result<InterfaceSnapshot, String> {
     Err("network counters are only available on macOS".to_owned())
 }
 
 #[cfg(target_os = "macos")]
-fn read_interface_counters_macos() -> io::Result<InterfaceCounters> {
+fn read_interface_snapshot_macos() -> io::Result<InterfaceSnapshot> {
     let mut name = [libc::CTL_NET, libc::PF_ROUTE, 0, 0, libc::NET_RT_IFLIST2, 0];
     let mut buffer = Vec::new();
     for _ in 0..3 {
@@ -178,7 +197,7 @@ fn read_interface_counters_macos() -> io::Result<InterfaceCounters> {
             return Err(io::Error::last_os_error());
         }
         if length == 0 {
-            return Ok(InterfaceCounters::default());
+            return Ok(InterfaceSnapshot::default());
         }
 
         buffer.resize(length, 0);
@@ -194,7 +213,7 @@ fn read_interface_counters_macos() -> io::Result<InterfaceCounters> {
         };
         if read_result == 0 {
             buffer.truncate(length);
-            return Ok(parse_interface_counters(&buffer));
+            return Ok(parse_interface_snapshot(&buffer));
         }
 
         let error = io::Error::last_os_error();
@@ -206,8 +225,8 @@ fn read_interface_counters_macos() -> io::Result<InterfaceCounters> {
 }
 
 #[cfg(target_os = "macos")]
-fn parse_interface_counters(buffer: &[u8]) -> InterfaceCounters {
-    let mut counters = InterfaceCounters::default();
+fn parse_interface_snapshot(buffer: &[u8]) -> InterfaceSnapshot {
+    let mut counters = BTreeMap::new();
     let mut offset = 0usize;
     while offset + mem::size_of::<libc::if_msghdr2>() <= buffer.len() {
         let header =
@@ -226,13 +245,12 @@ fn parse_interface_counters(buffer: &[u8]) -> InterfaceCounters {
                 let received =
                     unsafe { ptr::addr_of!(header.ifm_data.ifi_ibytes).read_unaligned() };
                 let sent = unsafe { ptr::addr_of!(header.ifm_data.ifi_obytes).read_unaligned() };
-                counters.received = counters.received.saturating_add(received);
-                counters.sent = counters.sent.saturating_add(sent);
+                counters.insert(name, InterfaceCounters { received, sent });
             }
         }
         offset += message_len;
     }
-    counters
+    InterfaceSnapshot(counters)
 }
 
 #[cfg(target_os = "macos")]
