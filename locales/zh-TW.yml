@@ -17,7 +17,8 @@ dialog.save: 儲存
 dialog.cancel: 取消
 dialog.invalid_ipv4: 請輸入有效的 IPv4 位址
 dialog.about_ok: 好
-dialog.about_body: "版本 %{version}\n監控公網 IPv4 的 macOS 選單列應用程式。"
+dialog.about_version: "版本 %{version}"
+dialog.about_body: "監控公網 IPv4 的 macOS 選單列應用程式。"
 notify.mismatch_title: 公網 IP 與期望不符
 notify.mismatch_body: "目前 %{current}，期望 %{expected}"
 notify.fetch_failure_title: 無法取得公網 IP

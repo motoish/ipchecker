@@ -1,16 +1,50 @@
-use ipchecker::about::{about_informative_text, about_message_title};
+use ipchecker::about::{
+    about_description, about_informative_text, about_message_title, marketing_version,
+};
 
 #[test]
-fn about_copy_includes_package_version_and_product_name() {
-    rust_i18n::set_locale("zh-CN");
-    let version = env!("CARGO_PKG_VERSION");
-    assert_eq!(about_message_title(), "ipchecker");
+fn marketing_version_strips_prerelease_hash() {
+    let package = env!("CARGO_PKG_VERSION");
+    let marketing = marketing_version();
     assert!(
-        about_informative_text().contains(&format!("版本 {version}")),
-        "about text should include version, got {}",
-        about_informative_text()
+        package == marketing || package.starts_with(&format!("{marketing}-")),
+        "marketing version {marketing} should be the date prefix of {package}"
     );
-    assert!(about_informative_text().contains("macOS 菜单栏"));
+    assert!(
+        !marketing.contains('-'),
+        "About version should not include the commit hash, got {marketing}"
+    );
+}
+
+#[test]
+fn about_copy_uses_cursor_style_version_line() {
+    rust_i18n::set_locale("zh-CN");
+    assert_eq!(about_message_title(), "ipchecker");
+    assert_eq!(
+        about_informative_text(),
+        format!("版本 {}", marketing_version())
+    );
+    assert_eq!(about_description(), "监控公网 IPv4 的 macOS 菜单栏应用。");
+
+    rust_i18n::set_locale("en");
+    assert_eq!(
+        about_informative_text(),
+        format!("Version {}", marketing_version())
+    );
+    assert_eq!(
+        about_description(),
+        "A macOS menu bar app that watches your public IPv4."
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn about_build_time_line_includes_relative_time() {
+    let line = ipchecker::about::about_build_time_line();
+    assert!(
+        line.contains('(') && line.ends_with(')'),
+        "build time should include a relative suffix, got {line}"
+    );
 }
 
 #[cfg(target_os = "macos")]

@@ -17,7 +17,8 @@ dialog.save: Сохранить
 dialog.cancel: Отмена
 dialog.invalid_ipv4: Введите действительный адрес IPv4
 dialog.about_ok: OK
-dialog.about_body: "Версия %{version}\nПриложение в строке меню macOS для мониторинга публичного IPv4."
+dialog.about_version: "Версия %{version}"
+dialog.about_body: "Приложение в строке меню macOS для мониторинга публичного IPv4."
 notify.mismatch_title: Публичный IP не совпадает с ожидаемым
 notify.mismatch_body: "Текущий %{current}, ожидаемый %{expected}"
 notify.fetch_failure_title: Не удалось получить публичный IP

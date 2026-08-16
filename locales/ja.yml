@@ -17,7 +17,8 @@ dialog.save: 保存
 dialog.cancel: キャンセル
 dialog.invalid_ipv4: 有効なIPv4アドレスを入力してください
 dialog.about_ok: OK
-dialog.about_body: "バージョン %{version}\nグローバルIPv4を監視するmacOSメニューバーアプリ。"
+dialog.about_version: "バージョン %{version}"
+dialog.about_body: "グローバルIPv4を監視するmacOSメニューバーアプリ。"
 notify.mismatch_title: グローバルIPが期待と一致しません
 notify.mismatch_body: "現在 %{current}、期待 %{expected}"
 notify.fetch_failure_title: グローバルIPを取得できません

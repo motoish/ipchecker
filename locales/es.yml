@@ -17,7 +17,8 @@ dialog.save: Guardar
 dialog.cancel: Cancelar
 dialog.invalid_ipv4: Introduce una dirección IPv4 válida
 dialog.about_ok: OK
-dialog.about_body: "Versión %{version}\nUna app de la barra de menús de macOS que vigila tu IPv4 pública."
+dialog.about_version: "Versión %{version}"
+dialog.about_body: "Una app de la barra de menús de macOS que vigila tu IPv4 pública."
 notify.mismatch_title: La IP pública no coincide con la esperada
 notify.mismatch_body: "Actual %{current}, esperada %{expected}"
 notify.fetch_failure_title: No se pudo obtener la IP pública

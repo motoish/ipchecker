@@ -17,7 +17,8 @@ dialog.save: 保存
 dialog.cancel: 取消
 dialog.invalid_ipv4: 请输入有效的 IPv4 地址
 dialog.about_ok: 好
-dialog.about_body: "版本 %{version}\n监控公网 IPv4 的 macOS 菜单栏应用。"
+dialog.about_version: "版本 %{version}"
+dialog.about_body: "监控公网 IPv4 的 macOS 菜单栏应用。"
 notify.mismatch_title: 公网 IP 与期望不符
 notify.mismatch_body: "当前 %{current}，期望 %{expected}"
 notify.fetch_failure_title: 无法获取公网 IP

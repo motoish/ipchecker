@@ -17,7 +17,8 @@ dialog.save: 저장
 dialog.cancel: 취소
 dialog.invalid_ipv4: 유효한 IPv4 주소를 입력하세요
 dialog.about_ok: 확인
-dialog.about_body: "버전 %{version}\n공인 IPv4를 감시하는 macOS 메뉴 막대 앱."
+dialog.about_version: "버전 %{version}"
+dialog.about_body: "공인 IPv4를 감시하는 macOS 메뉴 막대 앱."
 notify.mismatch_title: 공인 IP가 예상과 다릅니다
 notify.mismatch_body: "현재 %{current}, 예상 %{expected}"
 notify.fetch_failure_title: 공인 IP를 가져올 수 없음
