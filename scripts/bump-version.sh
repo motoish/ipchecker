@@ -2,8 +2,10 @@
 # Bump the app version in every place that defines it.
 #
 # Single source of truth after bump: Cargo.toml `version`.
-# Also syncs Cargo.lock and resources/Info.plist marketing + build numbers.
-# About UI already reads env!("CARGO_PKG_VERSION") — no locale edits needed.
+# Also syncs Cargo.lock and resources/Info.plist. CFBundleShortVersionString is
+# the stable CalVer `YYYY.M.D` (Apple requires three numeric segments).
+# CFBundleVersion is a monotonic integer build. About UI reads the date prefix
+# of CARGO_PKG_VERSION — no locale edits needed.
 #
 # Releases use CalVer as Cargo-compatible `YYYY.M.D-<sha8>` (no leading zeros),
 # for example 2026.8.16-a1b2c3d4. The calendar day is Asia/Tokyo. Cargo
@@ -69,7 +71,8 @@ def prerelease_sha(sha: str) -> str:
     return sha8
 
 
-version = f"{today_calver()}-{prerelease_sha(git_head_sha())}"
+stable = today_calver()
+version = f"{stable}-{prerelease_sha(git_head_sha())}"
 
 if version == current:
     raise SystemExit(f"already at version {current}")
@@ -98,7 +101,7 @@ cargo_lock.write_text(lock_new, encoding="utf-8")
 plist = info_plist.read_text(encoding="utf-8")
 plist, count = re.subn(
     r"(<key>CFBundleShortVersionString</key>\s*<string>)([^<]+)(</string>)",
-    rf"\g<1>{version}\g<3>",
+    rf"\g<1>{stable}\g<3>",
     plist,
     count=1,
 )
@@ -114,7 +117,7 @@ if not build_match:
 try:
     build = str(int(build_match.group(1)) + 1)
 except ValueError:
-    build = version
+    build = "1"
 
 plist, count = re.subn(
     r"(<key>CFBundleVersion</key>\s*<string>)([^<]+)(</string>)",
@@ -126,7 +129,7 @@ if count != 1:
     raise SystemExit("failed to update CFBundleVersion")
 info_plist.write_text(plist, encoding="utf-8")
 
-print(f"{current} -> {version} (CFBundleVersion {build})")
+print(f"{current} -> {version} (CFBundleShortVersionString {stable}, CFBundleVersion {build})")
 
 github_output = os.environ.get("GITHUB_OUTPUT")
 if github_output:
