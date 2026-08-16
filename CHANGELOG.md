@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.17-21537789
+
+### Miscellaneous Tasks
+
+- Add cache rust build by @motoish
+
 ## 2026.8.17-6976b436
 
 ### Bug Fixes
