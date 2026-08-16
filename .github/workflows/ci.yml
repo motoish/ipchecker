@@ -57,3 +57,4 @@ jobs:
         uses: ./.github/workflows/release
         with:
           tag: ${{ steps.bump.outputs.tag }}
+          stable_tag: ${{ steps.bump.outputs.stable_tag }}

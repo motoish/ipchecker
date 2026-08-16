@@ -3,7 +3,10 @@ description: Create the GitHub Release and update CHANGELOG.md
 
 inputs:
   tag:
-    description: Git tag including the v prefix
+    description: Unique git tag including the v prefix
+    required: true
+  stable_tag:
+    description: Moving daily stable tag including the v prefix
     required: true
 
 runs:
@@ -18,13 +21,27 @@ runs:
         OUTPUT: CHANGES.md
         GITHUB_REPO: ${{ github.repository }}
 
-    - name: Create GitHub Release
+    - name: Create unique GitHub Release
       uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ inputs.tag }}
         name: ${{ inputs.tag }}
         body_path: CHANGES.md
         generate_release_notes: false
+        prerelease: true
+        make_latest: false
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Update daily stable GitHub Release
+      uses: softprops/action-gh-release@v3
+      with:
+        tag_name: ${{ inputs.stable_tag }}
+        name: ${{ inputs.stable_tag }}
+        body_path: CHANGES.md
+        generate_release_notes: false
+        prerelease: false
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ github.token }}
 

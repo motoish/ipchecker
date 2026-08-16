@@ -6,8 +6,11 @@ outputs:
     description: Cargo package version
     value: ${{ steps.bump.outputs.version }}
   tag:
-    description: Git tag including the v prefix
+    description: Unique git tag including the v prefix
     value: ${{ steps.bump.outputs.tag }}
+  stable_tag:
+    description: Moving daily stable tag including the v prefix
+    value: ${{ steps.bump.outputs.stable_tag }}
 
 runs:
   using: composite
@@ -27,7 +30,7 @@ runs:
         set -euo pipefail
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock resources/Info.plist
+        git add Cargo.toml Cargo.lock resources/Info.plist
         if git diff --staged --quiet; then
           echo "No version file changes; refusing to tag" >&2
           exit 1
@@ -46,3 +49,11 @@ runs:
         fi
         git tag "$tag"
         git push origin "$tag"
+
+    - name: Point daily stable tag at this commit
+      shell: bash
+      run: |
+        set -euo pipefail
+        stable_tag="${{ steps.bump.outputs.stable_tag }}"
+        git tag --force "$stable_tag"
+        git push --force origin "refs/tags/${stable_tag}"
