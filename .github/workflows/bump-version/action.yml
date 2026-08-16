@@ -27,7 +27,7 @@ runs:
         set -euo pipefail
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add Cargo.toml resources/Info.plist
+          git add Cargo.toml Cargo.lock resources/Info.plist
         if git diff --staged --quiet; then
           echo "No version file changes; refusing to tag" >&2
           exit 1
