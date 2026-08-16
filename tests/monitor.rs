@@ -37,12 +37,15 @@ fn mute_suppresses_notification_without_hiding_mismatch() {
 }
 
 #[test]
-fn failure_notification_is_latched_until_success() {
+fn failure_remains_an_active_notification_condition_until_success() {
     let mut monitor = Monitor::default();
     let first = monitor.apply(Err(FetchError::AllSourcesFailed(vec![])), None, false);
     let second = monitor.apply(Err(FetchError::AllSourcesFailed(vec![])), None, false);
     assert_eq!(first.notification, Some(NotificationDecision::FetchFailure));
-    assert_eq!(second.notification, None);
+    assert_eq!(
+        second.notification,
+        Some(NotificationDecision::FetchFailure)
+    );
     monitor.apply(Ok(ip("203.0.113.1")), None, false);
     let later = monitor.apply(Err(FetchError::AllSourcesFailed(vec![])), None, false);
     assert_eq!(later.notification, Some(NotificationDecision::FetchFailure));
@@ -54,15 +57,6 @@ fn a_fresh_session_is_never_muted() {
     session.set_muted(true);
     assert!(session.is_muted());
     assert!(!Session::new().is_muted());
-}
-
-#[test]
-fn session_toggle_changes_muted_state() {
-    let mut session = Session::new();
-    session.toggle_muted();
-    assert!(session.is_muted());
-    session.toggle_muted();
-    assert!(!session.is_muted());
 }
 
 #[test]
@@ -82,6 +76,16 @@ fn failure_retains_last_success_ip() {
     assert_eq!(outcome.state, MonitorState::Unknown);
     assert_eq!(outcome.current_ip, None);
     assert_eq!(outcome.last_success_ip, Some(ip("203.0.113.1")));
+}
+
+#[test]
+fn recomparing_without_a_current_ip_clears_the_old_notification_decision() {
+    let outcome = Monitor::default().apply(Err(FetchError::AllSourcesFailed(vec![])), None, false);
+
+    let recomputed = outcome.recompare_expected(Some(ip("203.0.113.2")));
+
+    assert_eq!(recomputed.state, MonitorState::Unknown);
+    assert_eq!(recomputed.notification, None);
 }
 
 #[test]

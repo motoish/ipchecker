@@ -8,10 +8,12 @@ menu.mute_session: Ne plus notifier cette session
 menu.about: À propos d’ipchecker…
 menu.quit: Quitter
 status.current_ip: "IP publique actuelle : %{ip}"
+status.last_success_ip: "Dernière IP publique : %{ip}"
 status.expected_ip: "IP attendue : %{ip}"
 status.unknown: Inconnue
 status.unset: Non définie
 status.tooltip: "Actuelle : %{current} | Attendue : %{expected}"
+status.tooltip_last: "Dernière : %{current} | Attendue : %{expected}"
 dialog.set_expected_title: Définir l’IP attendue
 dialog.save: Enregistrer
 dialog.cancel: Annuler

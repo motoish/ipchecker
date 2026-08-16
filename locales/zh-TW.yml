@@ -8,10 +8,12 @@ menu.mute_session: 本工作階段不再提醒
 menu.about: 關於 ipchecker…
 menu.quit: 結束
 status.current_ip: "目前公網 IP：%{ip}"
+status.last_success_ip: "上次公網 IP：%{ip}"
 status.expected_ip: "期望 IP：%{ip}"
 status.unknown: 未知
 status.unset: 未設定
 status.tooltip: "目前: %{current} | 期望: %{expected}"
+status.tooltip_last: "上次: %{current} | 期望: %{expected}"
 dialog.set_expected_title: 設定期望 IP
 dialog.save: 儲存
 dialog.cancel: 取消

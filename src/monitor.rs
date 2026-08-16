@@ -30,16 +30,16 @@ pub struct MonitorOutcome {
 impl MonitorOutcome {
     pub fn recompare_expected(&self, expected: Option<Ipv4Addr>) -> Self {
         let Some(current_ip) = self.current_ip else {
-            return self.clone();
-        };
-        let state = match expected {
-            None => MonitorState::Unconfigured,
-            Some(expected_ip) if current_ip == expected_ip => MonitorState::Matched,
-            Some(_) => MonitorState::Mismatched,
+            return Self {
+                state: MonitorState::Unknown,
+                current_ip: None,
+                last_success_ip: self.last_success_ip,
+                notification: None,
+            };
         };
 
         Self {
-            state,
+            state: state_for(current_ip, expected),
             current_ip: self.current_ip,
             last_success_ip: self.last_success_ip,
             notification: None,
@@ -50,7 +50,6 @@ impl MonitorOutcome {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Monitor {
     last_success_ip: Option<Ipv4Addr>,
-    failure_notified: bool,
 }
 
 impl Monitor {
@@ -63,18 +62,16 @@ impl Monitor {
         match fetch {
             Ok(current_ip) => {
                 self.last_success_ip = Some(current_ip);
-                self.failure_notified = false;
-
-                let (state, notification) = match expected {
-                    None => (MonitorState::Unconfigured, None),
-                    Some(expected) if current_ip == expected => (MonitorState::Matched, None),
-                    Some(expected) => (
-                        MonitorState::Mismatched,
-                        (!muted).then_some(NotificationDecision::Mismatch {
+                let state = state_for(current_ip, expected);
+                let notification = if muted {
+                    None
+                } else {
+                    expected
+                        .filter(|expected_ip| *expected_ip != current_ip)
+                        .map(|expected| NotificationDecision::Mismatch {
                             current: current_ip,
                             expected,
-                        }),
-                    ),
+                        })
                 };
 
                 MonitorOutcome {
@@ -85,12 +82,7 @@ impl Monitor {
                 }
             }
             Err(FetchError::AllSourcesFailed(_)) => {
-                let notification = if !self.failure_notified && !muted {
-                    self.failure_notified = true;
-                    Some(NotificationDecision::FetchFailure)
-                } else {
-                    None
-                };
+                let notification = (!muted).then_some(NotificationDecision::FetchFailure);
 
                 MonitorOutcome {
                     state: MonitorState::Unknown,
@@ -100,5 +92,13 @@ impl Monitor {
                 }
             }
         }
+    }
+}
+
+fn state_for(current: Ipv4Addr, expected: Option<Ipv4Addr>) -> MonitorState {
+    match expected {
+        None => MonitorState::Unconfigured,
+        Some(expected) if current == expected => MonitorState::Matched,
+        Some(_) => MonitorState::Mismatched,
     }
 }

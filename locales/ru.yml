@@ -8,10 +8,12 @@ menu.mute_session: Не уведомлять в этой сессии
 menu.about: О программе ipchecker…
 menu.quit: Выход
 status.current_ip: "Текущий публичный IP: %{ip}"
+status.last_success_ip: "Последний публичный IP: %{ip}"
 status.expected_ip: "Ожидаемый IP: %{ip}"
 status.unknown: Неизвестно
 status.unset: Не задан
 status.tooltip: "Текущий: %{current} | Ожидаемый: %{expected}"
+status.tooltip_last: "Последний: %{current} | Ожидаемый: %{expected}"
 dialog.set_expected_title: Задать ожидаемый IP
 dialog.save: Сохранить
 dialog.cancel: Отмена

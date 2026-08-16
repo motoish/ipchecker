@@ -1,9 +1,8 @@
 use std::net::Ipv4Addr;
 
 use ipchecker::{
-    app::PendingNotificationDecision,
     config::Config,
-    monitor::{Monitor, MonitorOutcome, MonitorState, NotificationDecision},
+    monitor::{Monitor, MonitorOutcome, MonitorState},
     session::Session,
     ui::{
         FeedbackRestoreGuard, IconState, MenuAction, UiCommand, UiError, UiModel,
@@ -29,8 +28,12 @@ fn model_for(
     let mut session = Session::new();
     session.set_muted(muted);
     let outcome = MonitorOutcome {
+        current_ip: if state == MonitorState::Unknown {
+            None
+        } else {
+            last_success_ip
+        },
         state,
-        current_ip: None,
         last_success_ip,
         notification: None,
     };
@@ -81,12 +84,14 @@ fn glyph_shapes_are_knocked_out_of_the_filled_disc() {
 }
 
 #[test]
-fn unknown_with_last_success_keeps_last_ip_visible() {
+fn unknown_with_last_success_labels_the_address_as_stale() {
     rust_i18n::set_locale("zh-CN");
     let model = model_for(MonitorState::Unknown, Some(ip("192.0.2.1")), None, false);
 
-    assert_eq!(model.current_title, "当前公网 IP：192.0.2.1");
+    assert_eq!(model.current_title, "上次公网 IP：192.0.2.1");
+    assert_eq!(model.tooltip, "上次: 192.0.2.1 | 期望: 未设置");
     assert_eq!(model.icon_state, IconState::Unknown);
+    assert!(!model.can_use_current_ip);
 }
 
 #[test]
@@ -99,7 +104,24 @@ fn current_ip_row_is_copyable_only_when_an_address_is_known() {
 
     let with_ip = model_for(MonitorState::Unknown, Some(ip("192.0.2.1")), None, false);
     assert!(with_ip.can_copy_current_ip);
-    assert_eq!(with_ip.current_title, "当前公网 IP：192.0.2.1");
+    assert_eq!(with_ip.current_title, "上次公网 IP：192.0.2.1");
+}
+
+#[test]
+fn successful_current_ip_can_be_used_as_expected() {
+    let config = Config::default();
+    let session = Session::new();
+    let current = ip("192.0.2.1");
+    let outcome = MonitorOutcome {
+        state: MonitorState::Unconfigured,
+        current_ip: Some(current),
+        last_success_ip: Some(current),
+        notification: None,
+    };
+
+    let model = UiModel::from_state(&config, &session, &outcome);
+
+    assert!(model.can_use_current_ip);
 }
 
 #[test]
@@ -234,29 +256,6 @@ fn changing_expected_from_mismatch_to_current_ip_recompares_immediately() {
     assert_eq!(recomputed.state, MonitorState::Matched);
     assert_eq!(recomputed.current_ip, Some(ip("192.0.2.1")));
     assert_eq!(recomputed.notification, None);
-}
-
-#[test]
-fn pending_notification_keeps_only_the_latest_decision_and_clears_on_take() {
-    let mut pending = PendingNotificationDecision::default();
-    pending.replace(Some(NotificationDecision::Mismatch {
-        current: ip("192.0.2.1"),
-        expected: ip("192.0.2.2"),
-    }));
-    pending.replace(Some(NotificationDecision::FetchFailure));
-
-    assert_eq!(pending.take(), Some(NotificationDecision::FetchFailure));
-    assert_eq!(pending.take(), None);
-}
-
-#[test]
-fn pending_notification_is_cleared_by_a_new_outcome_without_a_decision() {
-    let mut pending = PendingNotificationDecision::default();
-    pending.replace(Some(NotificationDecision::FetchFailure));
-
-    pending.replace(None);
-
-    assert_eq!(pending.take(), None);
 }
 
 #[test]

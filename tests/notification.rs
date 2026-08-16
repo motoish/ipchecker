@@ -1,6 +1,7 @@
 use std::{net::Ipv4Addr, time::Duration};
 
 use ipchecker::{
+    app::NotificationCoordinator,
     monitor::NotificationDecision,
     notification::{
         ActionSink, AuthorizationResolution, AuthorizationState, NotificationAction,
@@ -11,6 +12,49 @@ use ipchecker::{
 
 fn ip(value: &str) -> Ipv4Addr {
     value.parse().expect("test IP address should parse")
+}
+
+#[test]
+fn repeated_pending_condition_is_not_cleared_before_delivery() {
+    let mut coordinator = NotificationCoordinator::default();
+    let decision = NotificationDecision::FetchFailure;
+
+    coordinator.observe(Some(decision.clone()), false);
+    coordinator.observe(Some(decision.clone()), false);
+
+    assert_eq!(coordinator.pending(), Some(decision));
+}
+
+#[test]
+fn delivered_condition_is_suppressed_until_the_episode_changes() {
+    let mut coordinator = NotificationCoordinator::default();
+    let first = NotificationDecision::Mismatch {
+        current: ip("192.0.2.1"),
+        expected: ip("192.0.2.2"),
+    };
+
+    coordinator.observe(Some(first.clone()), false);
+    coordinator.mark_delivered(&first);
+    coordinator.observe(Some(first), false);
+    assert_eq!(coordinator.pending(), None);
+
+    coordinator.observe(None, false);
+    let next = NotificationDecision::Mismatch {
+        current: ip("192.0.2.3"),
+        expected: ip("192.0.2.2"),
+    };
+    coordinator.observe(Some(next.clone()), false);
+    assert_eq!(coordinator.pending(), Some(next));
+}
+
+#[test]
+fn muting_clears_the_active_notification_episode() {
+    let mut coordinator = NotificationCoordinator::default();
+    coordinator.observe(Some(NotificationDecision::FetchFailure), false);
+
+    coordinator.observe(Some(NotificationDecision::FetchFailure), true);
+
+    assert_eq!(coordinator.pending(), None);
 }
 
 fn assert_send_sync_static<T: Send + Sync + 'static>() {}

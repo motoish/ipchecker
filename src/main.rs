@@ -1,6 +1,7 @@
 #[cfg(target_os = "macos")]
 mod macos {
     use std::{
+        net::Ipv4Addr,
         thread,
         time::{Duration, Instant},
     };
@@ -9,7 +10,7 @@ mod macos {
     use ipchecker::{
         about::{apply_application_icon, show_about},
         app::{
-            EventSink, EventSinkClosed, PendingNotificationDecision, WorkerCommand, WorkerEvent,
+            EventSink, EventSinkClosed, NotificationCoordinator, WorkerCommand, WorkerEvent,
             WorkerHandle,
         },
         config::{Config, ConfigStore},
@@ -18,7 +19,7 @@ mod macos {
         ip_source::ReqwestIpSource,
         monitor::{Monitor, MonitorOutcome, MonitorState},
         net_speed::{
-            NetworkSpeedLabels, NetworkSpeedSampler, SAMPLE_INTERVAL, read_interface_counters,
+            NetworkSpeedLabels, NetworkSpeedSampler, SAMPLE_INTERVAL, read_interface_snapshot,
         },
         notification::{ActionSink, MacNotifier, NotificationAction, Notifier},
         session::Session,
@@ -80,8 +81,7 @@ mod macos {
         outcome: MonitorOutcome,
         tray_ui: Option<TrayUi>,
         notifier: Option<MacNotifier>,
-        notifier_bootstrapping: bool,
-        pending_notification: PendingNotificationDecision,
+        notification_coordinator: NotificationCoordinator,
         worker: Option<WorkerHandle>,
         feedback_restore: FeedbackRestoreGuard,
         /// Retained so Edit key equivalents stay registered for dialogs.
@@ -107,8 +107,7 @@ mod macos {
                 },
                 tray_ui: None,
                 notifier: None,
-                notifier_bootstrapping: false,
-                pending_notification: PendingNotificationDecision::default(),
+                notification_coordinator: NotificationCoordinator::default(),
                 worker: None,
                 feedback_restore: FeedbackRestoreGuard::default(),
                 app_edit_menu: None,
@@ -149,7 +148,7 @@ mod macos {
                 }
                 Err(error) => log::error!("failed to create public IP source: {error}"),
             }
-            self.notifier_bootstrapping = self.start_notifier_bootstrap();
+            self.start_notifier_bootstrap();
         }
 
         fn handle_user_event(&mut self, event: UserEvent, control_flow: &mut ControlFlow) {
@@ -160,17 +159,11 @@ mod macos {
                         self.config.expected_ip,
                         self.session.is_muted(),
                     );
-                    let notification = outcome.notification.clone();
+                    self.notification_coordinator
+                        .observe(outcome.notification.clone(), self.session.is_muted());
                     self.outcome = outcome;
                     self.apply_ui();
-
-                    if self.notifier.is_some() {
-                        if let Some(decision) = notification {
-                            self.send_notification(decision);
-                        }
-                    } else if self.notifier_bootstrapping {
-                        self.pending_notification.replace(notification);
-                    }
+                    self.deliver_pending_notification();
                 }
                 UserEvent::Menu(id) => {
                     let Some(action) = self
@@ -188,11 +181,7 @@ mod macos {
                     self.handle_command(command, control_flow);
                 }
                 UserEvent::Notification(NotificationAction::Continue) => {}
-                UserEvent::Notification(NotificationAction::MuteSession) => {
-                    self.session.set_muted(true);
-                    self.pending_notification.replace(None);
-                    self.apply_ui();
-                }
+                UserEvent::Notification(NotificationAction::MuteSession) => self.set_muted(true),
                 UserEvent::NotifierReady(result) => self.finish_notifier_bootstrap(result),
                 UserEvent::RestoreExpectedTitle(token) => {
                     if self.feedback_restore.claim(token) {
@@ -216,13 +205,7 @@ mod macos {
                 UiCommand::UseCurrentIp => self.use_current_ip(),
                 UiCommand::SetInterval(minutes) => self.set_interval(minutes),
                 UiCommand::CheckNow => self.send_worker_command(WorkerCommand::CheckNow),
-                UiCommand::SetMuted(muted) => {
-                    self.session.set_muted(muted);
-                    if muted {
-                        self.pending_notification.replace(None);
-                    }
-                    self.apply_ui();
-                }
+                UiCommand::SetMuted(muted) => self.set_muted(muted),
                 UiCommand::SetShowNetworkSpeed(is_show_network_speed) => {
                     self.set_show_network_speed(is_show_network_speed);
                 }
@@ -257,7 +240,19 @@ mod macos {
             let Some(expected_ip) = prompt_expected_ip(self.config.expected_ip) else {
                 return;
             };
+            self.set_expected_ip(expected_ip);
+        }
 
+        fn use_current_ip(&mut self) {
+            let Some(current_ip) = self.outcome.current_ip else {
+                log::warn!("ignored use-current-IP command without a current successful check");
+                return;
+            };
+
+            self.set_expected_ip(current_ip);
+        }
+
+        fn set_expected_ip(&mut self, expected_ip: Ipv4Addr) {
             let mut candidate = self.config.clone();
             candidate.expected_ip = Some(expected_ip);
             if self.save_candidate(candidate) {
@@ -265,17 +260,12 @@ mod macos {
             }
         }
 
-        fn use_current_ip(&mut self) {
-            let Some(current_ip) = self.outcome.last_success_ip else {
-                log::warn!("ignored use-current-IP command before a successful check");
-                return;
-            };
-
-            let mut candidate = self.config.clone();
-            candidate.expected_ip = Some(current_ip);
-            if self.save_candidate(candidate) {
-                self.recompare_expected_and_check();
+        fn set_muted(&mut self, muted: bool) {
+            self.session.set_muted(muted);
+            if muted {
+                self.notification_coordinator.observe(None, true);
             }
+            self.apply_ui();
         }
 
         fn set_interval(&mut self, minutes: u64) {
@@ -341,15 +331,15 @@ mod macos {
         }
 
         fn recompare_expected_and_check(&mut self) {
-            self.pending_notification.replace(None);
+            self.notification_coordinator.observe(None, false);
             self.outcome = self.outcome.recompare_expected(self.config.expected_ip);
             self.apply_ui();
             self.send_worker_command(WorkerCommand::CheckNow);
         }
 
-        fn start_notifier_bootstrap(&self) -> bool {
+        fn start_notifier_bootstrap(&self) {
             let proxy = self.proxy.clone();
-            match thread::Builder::new()
+            if let Err(error) = thread::Builder::new()
                 .name("ipchecker-notifier-bootstrap".to_owned())
                 .spawn(move || {
                     let mut notifier = MacNotifier::new();
@@ -360,42 +350,40 @@ mod macos {
                     if proxy.send_event(UserEvent::NotifierReady(result)).is_err() {
                         log::debug!("notifier bootstrap finished after the event loop closed");
                     }
-                }) {
-                Ok(_) => true,
-                Err(error) => {
-                    log::warn!("failed to start notification authorization: {error}");
-                    false
-                }
+                })
+            {
+                log::warn!("failed to start notification authorization: {error}");
             }
         }
 
         fn finish_notifier_bootstrap(&mut self, result: Result<MacNotifier, String>) {
-            self.notifier_bootstrapping = false;
             match result {
                 Ok(notifier) => {
                     self.notifier = Some(notifier);
-                    if let Some(decision) = self.pending_notification.take() {
-                        self.send_notification(decision);
-                    }
+                    self.deliver_pending_notification();
                 }
                 Err(error) => {
-                    self.pending_notification.replace(None);
+                    self.notification_coordinator.observe(None, false);
                     log::warn!("notification authorization unavailable: {error}");
                 }
             }
         }
 
-        fn send_notification(&mut self, decision: ipchecker::monitor::NotificationDecision) {
+        fn deliver_pending_notification(&mut self) {
+            let Some(decision) = self.notification_coordinator.pending() else {
+                return;
+            };
             let Some(notifier) = &mut self.notifier else {
                 return;
             };
-            if let Err(error) = notifier.send(
-                decision,
+            match notifier.send(
+                decision.clone(),
                 Box::new(NotificationActionProxy {
                     proxy: self.proxy.clone(),
                 }),
             ) {
-                log::warn!("failed to send notification: {error}");
+                Ok(()) => self.notification_coordinator.mark_delivered(&decision),
+                Err(error) => log::warn!("failed to send notification: {error}"),
             }
         }
 
@@ -445,7 +433,7 @@ mod macos {
                 .spawn(move || {
                     let mut sampler = NetworkSpeedSampler::default();
                     loop {
-                        let labels = match read_interface_counters() {
+                        let labels = match read_interface_snapshot() {
                             Ok(counters) => sampler.observe(Instant::now(), counters).clone(),
                             Err(error) => {
                                 log::warn!("failed to read interface counters: {error}");

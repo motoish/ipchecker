@@ -8,10 +8,12 @@ menu.mute_session: このセッションでは通知しない
 menu.about: ipcheckerについて…
 menu.quit: 終了
 status.current_ip: "現在のグローバルIP：%{ip}"
+status.last_success_ip: "前回のグローバルIP：%{ip}"
 status.expected_ip: "期待IP：%{ip}"
 status.unknown: 不明
 status.unset: 未設定
 status.tooltip: "現在: %{current} | 期待: %{expected}"
+status.tooltip_last: "前回: %{current} | 期待: %{expected}"
 dialog.set_expected_title: 期待IPを設定
 dialog.save: 保存
 dialog.cancel: キャンセル

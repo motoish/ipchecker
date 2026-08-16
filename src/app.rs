@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    fmt,
+    fmt, iter,
     net::Ipv4Addr,
     sync::mpsc::{self, RecvTimeoutError, Sender},
     thread::{self, JoinHandle},
@@ -13,15 +13,33 @@ use crate::{
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct PendingNotificationDecision(Option<NotificationDecision>);
+pub struct NotificationCoordinator {
+    active: Option<NotificationDecision>,
+    delivered: bool,
+}
 
-impl PendingNotificationDecision {
-    pub fn replace(&mut self, decision: Option<NotificationDecision>) {
-        self.0 = decision;
+impl NotificationCoordinator {
+    pub fn observe(&mut self, decision: Option<NotificationDecision>, muted: bool) {
+        if muted {
+            self.active = None;
+            self.delivered = false;
+            return;
+        }
+
+        if self.active != decision {
+            self.active = decision;
+            self.delivered = false;
+        }
     }
 
-    pub fn take(&mut self) -> Option<NotificationDecision> {
-        self.0.take()
+    pub fn pending(&self) -> Option<NotificationDecision> {
+        (!self.delivered).then(|| self.active.clone()).flatten()
+    }
+
+    pub fn mark_delivered(&mut self, decision: &NotificationDecision) {
+        if self.active.as_ref() == Some(decision) {
+            self.delivered = true;
+        }
     }
 }
 
@@ -101,12 +119,26 @@ fn run_worker<S, E>(
 
     loop {
         let keep_running = match commands.recv_timeout(interval) {
-            Ok(WorkerCommand::CheckNow) => check(&mut source, &sink),
-            Ok(WorkerCommand::SetInterval(next)) => {
-                interval = next;
-                check(&mut source, &sink)
+            Ok(first) => {
+                let mut should_check = false;
+                let mut should_shutdown = false;
+                for command in iter::once(first).chain(commands.try_iter()) {
+                    match command {
+                        WorkerCommand::CheckNow => should_check = true,
+                        WorkerCommand::SetInterval(next) => {
+                            interval = next;
+                            should_check = true;
+                        }
+                        WorkerCommand::Shutdown => should_shutdown = true,
+                    }
+                }
+
+                if should_shutdown {
+                    break;
+                }
+                !should_check || check(&mut source, &sink)
             }
-            Ok(WorkerCommand::Shutdown) | Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => check(&mut source, &sink),
         };
 

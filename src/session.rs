@@ -15,8 +15,4 @@ impl Session {
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
     }
-
-    pub fn toggle_muted(&mut self) {
-        self.muted = !self.muted;
-    }
 }

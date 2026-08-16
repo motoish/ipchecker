@@ -71,16 +71,34 @@ pub struct UiModel {
 impl UiModel {
     pub fn from_state(config: &Config, session: &Session, outcome: &MonitorOutcome) -> Self {
         let display_ip = outcome.current_ip.or(outcome.last_success_ip);
-        let current_value = display_ip
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|| t!("status.unknown").to_string());
         let expected_value = config
             .expected_ip
             .map(|ip| ip.to_string())
             .unwrap_or_else(|| t!("status.unset").to_string());
-        let tooltip_current = display_ip
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|| "—".to_owned());
+        let (current_title, tooltip) = match (outcome.current_ip, outcome.last_success_ip) {
+            (Some(current), _) => (
+                t!("status.current_ip", ip = current).to_string(),
+                t!(
+                    "status.tooltip",
+                    current = current,
+                    expected = expected_value
+                )
+                .to_string(),
+            ),
+            (None, Some(last_success)) => (
+                t!("status.last_success_ip", ip = last_success).to_string(),
+                t!(
+                    "status.tooltip_last",
+                    current = last_success,
+                    expected = expected_value
+                )
+                .to_string(),
+            ),
+            (None, None) => (
+                t!("status.current_ip", ip = t!("status.unknown")).to_string(),
+                t!("status.tooltip", current = "—", expected = expected_value).to_string(),
+            ),
+        };
         let icon_state = match outcome.state {
             MonitorState::Matched | MonitorState::Unconfigured => IconState::Normal,
             MonitorState::Mismatched => IconState::Alert,
@@ -88,20 +106,15 @@ impl UiModel {
         };
 
         Self {
-            current_title: t!("status.current_ip", ip = current_value).to_string(),
+            current_title,
             expected_title: t!("status.expected_ip", ip = expected_value).to_string(),
-            can_use_current_ip: outcome.last_success_ip.is_some(),
+            can_use_current_ip: outcome.current_ip.is_some(),
             can_copy_current_ip: display_ip.is_some(),
             interval_minutes: config.interval_minutes,
             muted: session.is_muted(),
             is_show_network_speed: config.is_show_network_speed,
             icon_state,
-            tooltip: t!(
-                "status.tooltip",
-                current = tooltip_current,
-                expected = expected_value
-            )
-            .to_string(),
+            tooltip,
         }
     }
 }
