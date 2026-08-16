@@ -1,6 +1,13 @@
 # Changelog
 
+## 2026.8.16-5d1d146b
+
+### Documentation
+
+- Modify cliff and changelog by @motoish
+
 ## 2026.8.16-8a1e170f
+
 ### Bug Fixes
 
 - Modify bump version shell by @motoish
@@ -10,11 +17,13 @@
 - Modify commit version bump by @motoish
 
 ## 2026.8.16-1716a7fb
+
 ### Bug Fixes
 
 - Modify content width by @motoish
 
 ## 2026.8.16-6198b524
+
 ### Bug Fixes
 
 - Modify bump version shell by @motoish
@@ -28,6 +37,7 @@
 - Refactor workflow by @motoish
 
 ## 2026.8.16-ef2b65f5
+
 ### Documentation
 
 - Modify README.md by @motoish
@@ -37,6 +47,7 @@
 - Update workflow by @motoish
 
 ## 2026.8.16
+
 ### Bug Fixes
 
 - Change release version rule by @motoish
@@ -48,7 +59,6 @@
 ### Features
 
 - Add network bandwidth display by @motoish
-
 - Make bandwidth display optional by @motoish
 
 ### Miscellaneous Tasks
@@ -56,6 +66,7 @@
 - Modify README.md by @motoish
 
 ## 0.1.0
+
 ### Miscellaneous Tasks
 
 - Update changelog automatically by @motoish
