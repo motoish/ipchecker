@@ -29,6 +29,8 @@ struct RawConfig {
     expected_ip: Option<String>,
     #[serde(default, deserialize_with = "recover_u64")]
     interval_minutes: Option<u64>,
+    #[serde(default, deserialize_with = "recover_bool")]
+    show_network_speed: Option<bool>,
 }
 
 fn recover_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -45,11 +47,20 @@ where
     Ok(Option::<u64>::deserialize(deserializer).ok().flatten())
 }
 
+fn recover_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<bool>::deserialize(deserializer).ok().flatten())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_ip: Option<Ipv4Addr>,
     pub interval_minutes: u64,
+    #[serde(rename = "show_network_speed")]
+    pub is_show_network_speed: bool,
 }
 
 impl Default for Config {
@@ -57,6 +68,7 @@ impl Default for Config {
         Self {
             expected_ip: None,
             interval_minutes: 5,
+            is_show_network_speed: true,
         }
     }
 }
@@ -75,6 +87,7 @@ impl Config {
                 .interval_minutes
                 .filter(|value| ALLOWED_INTERVAL_MINUTES.contains(value))
                 .unwrap_or(5),
+            is_show_network_speed: raw.show_network_speed.unwrap_or(true),
         }
     }
 

@@ -13,16 +13,17 @@ use tray_icon::{
 };
 
 #[cfg(target_os = "macos")]
-use objc2::runtime::AnyObject;
-#[cfg(target_os = "macos")]
 use objc2::rc::Retained;
+#[cfg(target_os = "macos")]
+use objc2::runtime::AnyObject;
 #[cfg(target_os = "macos")]
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
-    NSAttributedStringNSStringDrawing, NSColor, NSCompositingOperation, NSFont, NSFontAttributeName,
-    NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle, NSParagraphStyleAttributeName,
-    NSRectFill, NSTextAlignment, NSTextTab, NSTextTabOptionKey, NSView,
+    NSAttributedStringNSStringDrawing, NSColor, NSCompositingOperation, NSFont,
+    NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle,
+    NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab, NSTextTabOptionKey,
+    NSView,
 };
 #[cfg(target_os = "macos")]
 use objc2_foundation::{
@@ -62,6 +63,7 @@ pub struct UiModel {
     pub can_copy_current_ip: bool,
     pub interval_minutes: u64,
     pub muted: bool,
+    pub is_show_network_speed: bool,
     pub icon_state: IconState,
     pub tooltip: String,
 }
@@ -92,6 +94,7 @@ impl UiModel {
             can_copy_current_ip: display_ip.is_some(),
             interval_minutes: config.interval_minutes,
             muted: session.is_muted(),
+            is_show_network_speed: config.is_show_network_speed,
             icon_state,
             tooltip: t!(
                 "status.tooltip",
@@ -111,6 +114,7 @@ pub enum MenuAction {
     SetInterval(u64),
     CheckNow,
     ToggleMuted,
+    ToggleShowNetworkSpeed,
     About,
     Quit,
 }
@@ -123,19 +127,25 @@ pub enum UiCommand {
     SetInterval(u64),
     CheckNow,
     SetMuted(bool),
+    SetShowNetworkSpeed(bool),
     About,
     Quit,
 }
 
 impl UiCommand {
-    pub fn from_menu_action(action: MenuAction, currently_muted: bool) -> Self {
+    pub fn from_menu_action(
+        action: MenuAction,
+        is_muted: bool,
+        is_show_network_speed: bool,
+    ) -> Self {
         match action {
             MenuAction::CopyCurrentIp => Self::CopyCurrentIp,
             MenuAction::SetExpectedFromInput => Self::SetExpectedFromInput,
             MenuAction::UseCurrentIp => Self::UseCurrentIp,
             MenuAction::SetInterval(minutes) => Self::SetInterval(minutes),
             MenuAction::CheckNow => Self::CheckNow,
-            MenuAction::ToggleMuted => Self::SetMuted(!currently_muted),
+            MenuAction::ToggleMuted => Self::SetMuted(!is_muted),
+            MenuAction::ToggleShowNetworkSpeed => Self::SetShowNetworkSpeed(!is_show_network_speed),
             MenuAction::About => Self::About,
             MenuAction::Quit => Self::Quit,
         }
@@ -366,6 +376,7 @@ pub struct TrayUi {
     use_current_ip_item: MenuItem,
     interval_items: [IntervalMenuItem; 5],
     check_now_item: MenuItem,
+    show_network_speed_item: CheckMenuItem,
     mute_item: CheckMenuItem,
     about_item: MenuItem,
     quit_item: MenuItem,
@@ -400,6 +411,12 @@ impl TrayUi {
             interval_menu.append(&interval.item)?;
         }
         let check_now_item = MenuItem::new(t!("menu.check_now").as_ref(), true, None);
+        let show_network_speed_item = CheckMenuItem::new(
+            t!("menu.show_network_speed").as_ref(),
+            true,
+            model.is_show_network_speed,
+            None,
+        );
         let mute_item =
             CheckMenuItem::new(t!("menu.mute_session").as_ref(), true, model.muted, None);
         let about_item = MenuItem::new(t!("menu.about").as_ref(), true, None);
@@ -422,6 +439,7 @@ impl TrayUi {
             &interval_menu,
             &check_now_item,
             &separators[2],
+            &show_network_speed_item,
             &mute_item,
             &separators[3],
             &about_item,
@@ -447,6 +465,7 @@ impl TrayUi {
             use_current_ip_item,
             interval_items,
             check_now_item,
+            show_network_speed_item,
             mute_item,
             about_item,
             quit_item,
@@ -454,7 +473,7 @@ impl TrayUi {
             #[cfg(target_os = "macos")]
             speed_title_view,
         };
-        ui.set_network_speed(&NetworkSpeedLabels::unknown());
+        ui.set_network_speed(&NetworkSpeedLabels::unknown(), model.is_show_network_speed);
         Ok(ui)
     }
 
@@ -469,6 +488,8 @@ impl TrayUi {
                 .item
                 .set_checked(interval.minutes == model.interval_minutes);
         }
+        self.show_network_speed_item
+            .set_checked(model.is_show_network_speed);
         self.mute_item.set_checked(model.muted);
         self.tray.set_tooltip(Some(&model.tooltip))?;
         self.tray.set_icon_with_as_template(
@@ -482,11 +503,19 @@ impl TrayUi {
         self.current_item.set_text(title);
     }
 
-    pub fn set_network_speed(&self, labels: &NetworkSpeedLabels) {
+    pub fn set_network_speed(&self, labels: &NetworkSpeedLabels, is_visible: bool) {
         #[cfg(target_os = "macos")]
-        set_tray_speed_title(&self.tray, &self.speed_title_view, &labels.tray_title());
+        set_tray_speed_title(
+            &self.tray,
+            &self.speed_title_view,
+            &labels.tray_title(),
+            is_visible,
+        );
         #[cfg(not(target_os = "macos"))]
-        let _ = labels;
+        {
+            let _ = labels;
+            let _ = is_visible;
+        }
     }
 
     pub fn menu_action(&self, id: &MenuId) -> Option<MenuAction> {
@@ -501,6 +530,9 @@ impl TrayUi {
         }
         if id == self.check_now_item.id() {
             return Some(MenuAction::CheckNow);
+        }
+        if id == self.show_network_speed_item.id() {
+            return Some(MenuAction::ToggleShowNetworkSpeed);
         }
         if id == self.mute_item.id() {
             return Some(MenuAction::ToggleMuted);
@@ -629,11 +661,7 @@ fn install_speed_title_view(tray: &TrayIcon) -> Retained<SpeedTitleView> {
 }
 
 #[cfg(target_os = "macos")]
-fn set_tray_speed_title(
-    tray: &TrayIcon,
-    view: &SpeedTitleView,
-    title: &str,
-) {
+fn set_tray_speed_title(tray: &TrayIcon, view: &SpeedTitleView, title: &str, is_visible: bool) {
     let Some(mtm) = MainThreadMarker::new() else {
         log::warn!("skipped tray speed title; not on the main thread");
         return;
@@ -645,6 +673,13 @@ fn set_tray_speed_title(
         return;
     };
 
+    if !is_visible {
+        view.setHidden(true);
+        status_item.setLength(-1.0);
+        return;
+    }
+
+    view.setHidden(false);
     button.setTitle(&NSString::from_str(""));
     if let Some(image) = button.image() {
         view.set_icon(image);

@@ -3,6 +3,7 @@ menu.use_current: 设为当前公网 IP
 menu.interval: 检查间隔
 menu.minutes: "%{minutes} 分钟"
 menu.check_now: 立即检查
+menu.show_network_speed: 显示上下行速度
 menu.mute_session: 本会话不再提醒
 menu.about: 关于 ipchecker…
 menu.quit: 退出

@@ -6,6 +6,21 @@ use tempfile::tempdir;
 fn defaults_to_five_minutes_without_expected_ip() {
     assert_eq!(Config::default().interval_minutes, 5);
     assert_eq!(Config::default().expected_ip, None);
+    assert!(Config::default().is_show_network_speed);
+}
+
+#[test]
+fn missing_show_network_speed_defaults_to_enabled() {
+    let config = Config::from_toml("interval_minutes = 15\n");
+    assert!(config.is_show_network_speed);
+    assert_eq!(config.interval_minutes, 15);
+}
+
+#[test]
+fn invalid_show_network_speed_recovers_to_enabled() {
+    let config = Config::from_toml("show_network_speed = \"nope\"\ninterval_minutes = 30\n");
+    assert!(config.is_show_network_speed);
+    assert_eq!(config.interval_minutes, 30);
 }
 
 #[test]
@@ -38,6 +53,7 @@ fn valid_toml_round_trips() {
     let expected = Config {
         expected_ip: Some(Ipv4Addr::from_str("203.0.113.10").unwrap()),
         interval_minutes: 15,
+        is_show_network_speed: false,
     };
     assert_eq!(Config::from_toml(&expected.to_toml().unwrap()), expected);
 }
@@ -65,10 +81,12 @@ fn save_overwrites_existing_configuration() {
     let initial = Config {
         expected_ip: Some(Ipv4Addr::from_str("198.51.100.7").unwrap()),
         interval_minutes: 1,
+        is_show_network_speed: true,
     };
     let replacement = Config {
         expected_ip: Some(Ipv4Addr::from_str("203.0.113.8").unwrap()),
         interval_minutes: 60,
+        is_show_network_speed: false,
     };
 
     store.save(&initial).unwrap();

@@ -21,11 +21,26 @@ fn formats_from_kb_per_second_with_fixed_width() {
     assert_eq!(format_bytes_per_second(1024.0), rate("1", "KB/s"));
     assert_eq!(format_bytes_per_second(1536.0), rate("2", "KB/s"));
     assert_eq!(format_bytes_per_second(10_240.0), rate("10", "KB/s"));
-    assert_eq!(format_bytes_per_second(1023.0 * 1024.0), rate("1023", "KB/s"));
-    assert_eq!(format_bytes_per_second(1024.0 * 1024.0), rate("1.0", "MB/s"));
-    assert_eq!(format_bytes_per_second(1.5 * 1024.0 * 1024.0), rate("1.5", "MB/s"));
-    assert_eq!(format_bytes_per_second(12.34 * 1024.0 * 1024.0), rate("12.3", "MB/s"));
-    assert_eq!(format_bytes_per_second(1024.0 * 1024.0 * 1024.0), rate("1.0", "GB/s"));
+    assert_eq!(
+        format_bytes_per_second(1023.0 * 1024.0),
+        rate("1023", "KB/s")
+    );
+    assert_eq!(
+        format_bytes_per_second(1024.0 * 1024.0),
+        rate("1.0", "MB/s")
+    );
+    assert_eq!(
+        format_bytes_per_second(1.5 * 1024.0 * 1024.0),
+        rate("1.5", "MB/s")
+    );
+    assert_eq!(
+        format_bytes_per_second(12.34 * 1024.0 * 1024.0),
+        rate("12.3", "MB/s")
+    );
+    assert_eq!(
+        format_bytes_per_second(1024.0 * 1024.0 * 1024.0),
+        rate("1.0", "GB/s")
+    );
     assert_eq!(format_bytes_per_second(-8.0), rate("0", "KB/s"));
 }
 

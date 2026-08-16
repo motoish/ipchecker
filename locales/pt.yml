@@ -3,6 +3,7 @@ menu.use_current: Usar IP público atual
 menu.interval: Intervalo de verificação
 menu.minutes: "%{minutes} min"
 menu.check_now: Verificar agora
+menu.show_network_speed: Mostrar velocidade da rede
 menu.mute_session: Não notificar nesta sessão
 menu.about: Sobre o ipchecker…
 menu.quit: Sair

@@ -3,6 +3,7 @@ menu.use_current: 現在のグローバルIPを使用
 menu.interval: 確認間隔
 menu.minutes: "%{minutes} 分"
 menu.check_now: 今すぐ確認
+menu.show_network_speed: 通信速度を表示
 menu.mute_session: このセッションでは通知しない
 menu.about: ipcheckerについて…
 menu.quit: 終了
