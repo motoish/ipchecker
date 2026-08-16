@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026.8.17-15f3bd29
+
+### Documentation
+
+- Add rust-toolchain by @motoish
+- Modify README.md by @motoish
+
+### Miscellaneous Tasks
+
+- Modify uses line and optimization by @motoish
+- Modify description by @motoish
+
 ## 2026.8.17-9176bf8f
 
 ### Bug Fixes
