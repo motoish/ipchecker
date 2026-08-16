@@ -15,7 +15,9 @@
 
 ## Quick Start
 
-Requires macOS 13+, stable Rust, and Xcode Command Line Tools.
+Download `ipchecker.zip` from the [latest GitHub Release](https://github.com/motoish/ipchecker/releases/latest), unzip, and move `ipchecker.app` to Applications. The zip is ad-hoc signed; the first launch may need right-click → Open.
+
+To build locally, you need macOS 13+, stable Rust, and Xcode Command Line Tools:
 
 ```bash
 ./scripts/build_and_run.sh
@@ -71,7 +73,7 @@ Push to `main` runs format, Clippy, and tests first. Only if those pass does it 
 
 Each push creates an immutable pre-release `YYYY.M.D-<sha8>` (for example `2026.8.16-a1b2c3d4`) and moves that day's stable release `v2026.8.16` to the same commit. GitHub's latest release is the daily stable tag. Cargo versions cannot use `_`, so the unique tag uses `-`.
 
-The workflow updates `Cargo.toml`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases.
+The workflow updates `Cargo.toml`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases with a zipped `ipchecker.app`.
 
 About shows the stable CalVer date (for example `2026.8.17`). Locales do not need edits.
 
@@ -85,4 +87,5 @@ git-cliff --config cliff.toml -o CHANGELOG.md
 
 - Public-IP sources are queried in order: `api.ipify.org`, `ifconfig.me/ip`, then `icanhazip.com`.
 - Notification permission may be requested on first use and can be changed in System Settings.
-- Local builds use ad-hoc signing and are intended for development, not distribution.
+- GitHub Releases include an ad-hoc signed `ipchecker.app` zip. macOS may require right-click → Open the first time.
+- Local builds also use ad-hoc signing.
