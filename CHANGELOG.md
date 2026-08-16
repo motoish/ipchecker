@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.17-256e1df1
+
+### Bug Fixes
+
+- Release a stable version after incremental rebuilds by @motoish
+
 ## 2026.8.16-09ab0f4a
 
 ### Bug Fixes
