@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.8.16-09ab0f4a
+
+### Bug Fixes
+
+- Modify about dialog by @motoish
+- Modify bundle_metadata by @motoish
+
 ## 2026.8.16-47063234
 
 ### Bug Fixes
