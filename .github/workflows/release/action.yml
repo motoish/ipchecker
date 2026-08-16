@@ -8,6 +8,9 @@ inputs:
   stable_tag:
     description: Moving daily stable tag including the v prefix
     required: true
+  asset:
+    description: Path to the zipped .app for this version
+    required: true
 
 runs:
   using: composite
@@ -28,11 +31,27 @@ runs:
         tag_name: ${{ inputs.tag }}
         name: ${{ inputs.tag }}
         body_path: CHANGES.md
+        files: ${{ inputs.asset }}
+        fail_on_unmatched_files: true
         generate_release_notes: false
         prerelease: true
         make_latest: false
       env:
         GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Stage stable app zip
+      shell: bash
+      run: cp "${{ inputs.asset }}" ipchecker.zip
+
+    - name: Replace previous stable app zip
+      shell: bash
+      run: |
+        set -euo pipefail
+        if gh release view "${{ inputs.stable_tag }}" >/dev/null 2>&1; then
+          gh release delete-asset "${{ inputs.stable_tag }}" ipchecker.zip --yes || true
+        fi
+      env:
+        GH_TOKEN: ${{ github.token }}
 
     - name: Update daily stable GitHub Release
       uses: softprops/action-gh-release@v3
@@ -40,6 +59,8 @@ runs:
         tag_name: ${{ inputs.stable_tag }}
         name: ${{ inputs.stable_tag }}
         body_path: CHANGES.md
+        files: ipchecker.zip
+        fail_on_unmatched_files: true
         generate_release_notes: false
         prerelease: false
         make_latest: true

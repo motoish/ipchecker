@@ -38,7 +38,7 @@ jobs:
     name: Release
     needs: check
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message || '', 'chore(release):') }}
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     permissions:
       contents: write
 
@@ -53,8 +53,22 @@ jobs:
         id: bump
         uses: ./.github/workflows/bump-version
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.97.1
+
+      - name: Bundle app
+        run: bash scripts/bundle-local.sh
+
+      - name: Zip app
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent \
+            target/release/bundle/ipchecker.app \
+            "ipchecker-${{ steps.bump.outputs.version }}.zip"
+
       - name: Release
         uses: ./.github/workflows/release
         with:
           tag: ${{ steps.bump.outputs.tag }}
           stable_tag: ${{ steps.bump.outputs.stable_tag }}
+          asset: ipchecker-${{ steps.bump.outputs.version }}.zip
