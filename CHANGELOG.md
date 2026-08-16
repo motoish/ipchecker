@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.16-1716a7fb
+### Bug Fixes
+
+- Modify content width by @motoish
+
+
 ## 2026.8.16-6198b524
 ### Bug Fixes
 
