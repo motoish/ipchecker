@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag name including the v prefix (for example v0.2.1)
+        description: Tag name including the v prefix (for example v2026.8.16)
         required: true
         type: string
   workflow_call:
     inputs:
       tag:
-        description: Tag name including the v prefix (for example v0.2.1)
+        description: Tag name including the v prefix (for example v2026.8.16)
         required: true
         type: string
 
@@ -58,7 +58,7 @@ jobs:
           fi
           if [[ "$tag" != "$cargo_version" ]]; then
             echo "Tag v$tag does not match Cargo.toml version $cargo_version" >&2
-            echo "Run the Bump version workflow (or ./scripts/bump-version.sh) before tagging." >&2
+            echo "Push to main so the release workflow can bump and tag first." >&2
             exit 1
           fi
 
@@ -106,5 +106,5 @@ jobs:
             echo "CHANGELOG.md already up to date"
             exit 0
           fi
-          git commit -m "chore(release): update CHANGELOG.md for ${{ steps.meta.outputs.tag }}"
+          git commit -m "chore(release): update CHANGELOG.md for ${{ steps.meta.outputs.tag }} [skip ci]"
           git push origin main

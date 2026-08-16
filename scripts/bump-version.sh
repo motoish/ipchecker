@@ -5,32 +5,37 @@
 # Also syncs resources/Info.plist marketing + build numbers.
 # About UI already reads env!("CARGO_PKG_VERSION") — no locale edits needed.
 #
+# Releases use CalVer as Cargo-compatible `YYYY.M.D` (no leading zeros),
+# for example 2026.8.16. The calendar day is Asia/Tokyo.
+# A later push on the same day becomes `YYYY.M.D-<sha8>` because Cargo
+# versions cannot contain `_`.
+#
 # Usage:
-#   ./scripts/bump-version.sh 0.3.0
-#   ./scripts/bump-version.sh patch   # 0.2.0 -> 0.2.1
-#   ./scripts/bump-version.sh minor   # 0.2.0 -> 0.3.0
-#   ./scripts/bump-version.sh major   # 0.2.0 -> 1.0.0
+#   ./scripts/bump-version.sh
 set -euo pipefail
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cargo_toml="$repo_dir/Cargo.toml"
 info_plist="$repo_dir/resources/Info.plist"
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <x.y.z|patch|minor|major>" >&2
+if [[ $# -ne 0 ]]; then
+  echo "usage: $0" >&2
   exit 2
 fi
 
-python3 - "$cargo_toml" "$info_plist" "$1" <<'PY'
+python3 - "$cargo_toml" "$info_plist" <<'PY'
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 cargo_toml = Path(sys.argv[1])
 info_plist = Path(sys.argv[2])
-bump = sys.argv[3]
 
 cargo = cargo_toml.read_text(encoding="utf-8")
 match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', cargo)
@@ -38,22 +43,47 @@ if not match:
     raise SystemExit("version not found in Cargo.toml")
 current = match.group(1)
 
-if bump in {"patch", "minor", "major"}:
-    try:
-        major, minor, patch = (int(part) for part in current.split("."))
-    except ValueError as error:
-        raise SystemExit(f"cannot auto-bump non-semver version {current!r}") from error
-    if bump == "major":
-        major, minor, patch = major + 1, 0, 0
-    elif bump == "minor":
-        minor, patch = minor + 1, 0
-    else:
-        patch += 1
-    version = f"{major}.{minor}.{patch}"
-elif re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", bump):
-    version = bump
+
+def today_calver() -> str:
+    now = datetime.now(ZoneInfo("Asia/Tokyo"))
+    return f"{now.year}.{now.month}.{now.day}"
+
+
+def git_head_sha() -> str:
+    sha = os.environ.get("GITHUB_SHA", "").strip()
+    if sha:
+        return sha
+    return subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
+
+
+def git_tag_exists(tag: str) -> bool:
+    listed = subprocess.check_output(
+        ["git", "tag", "-l", tag],
+        text=True,
+    ).strip()
+    return listed == tag
+
+
+def prerelease_sha(sha: str) -> str:
+    sha8 = sha[:8].lower()
+    if not re.fullmatch(r"[0-9a-f]{8}", sha8):
+        raise SystemExit(f"commit hash is too short or not hex: {sha!r}")
+    if sha8.isdigit() and sha8.startswith("0"):
+        return f"g{sha8}"
+    return sha8
+
+
+today = today_calver()
+if git_tag_exists(f"v{today}"):
+    version = f"{today}-{prerelease_sha(git_head_sha())}"
 else:
-    raise SystemExit(f"invalid version: {bump} (want x.y.z, patch, minor, or major)")
+    version = today
+
+if version == current:
+    raise SystemExit(f"already at version {current}")
 
 cargo_new, count = re.subn(
     r'(?m)^(version\s*=\s*")([^"]+)(")',
@@ -97,9 +127,8 @@ if count != 1:
 info_plist.write_text(plist, encoding="utf-8")
 
 print(f"{current} -> {version} (CFBundleVersion {build})")
-print("next: commit, then git tag v{0} && git push origin v{0}".format(version))
 
-github_output = __import__("os").environ.get("GITHUB_OUTPUT")
+github_output = os.environ.get("GITHUB_OUTPUT")
 if github_output:
     with open(github_output, "a", encoding="utf-8") as handle:
         handle.write(f"version={version}\n")
