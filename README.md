@@ -7,6 +7,7 @@
 ## Features
 
 - Native menu bar experience with no Dock icon
+- Optional live upload/download rates beside the icon (`en*` interfaces, 1s refresh, KB/s → MB/s → GB/s)
 - Three fallback sources for reliable public IPv4 checks
 - Expected-IP comparison and mismatch notifications
 - 1, 5, 15, 30, or 60-minute check intervals
@@ -30,6 +31,7 @@ Open the menu bar icon to:
 - enter or paste an expected IPv4 address
 - use the current IP as the expected address
 - change the check interval or check immediately
+- show or hide live upload/download rates
 - mute notifications for the current session
 
 Configuration is stored at:
@@ -37,6 +39,8 @@ Configuration is stored at:
 ```text
 ~/Library/Application Support/ipchecker/config.toml
 ```
+
+The network-speed menu toggle is saved there as `show_network_speed` (default `true`).
 
 ## Development
 
