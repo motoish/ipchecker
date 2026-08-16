@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026.8.16-e727b24e
+
+### Bug Fixes
+
+- Modify bump version shell by @motoish
+
+### Documentation
+
+- Modify README.md by @motoish
+
+### Miscellaneous Tasks
+
+- Add stable tag conception by @motoish
+
 ## 2026.8.16-5d1d146b
 
 ### Documentation
@@ -38,22 +52,13 @@
 
 ## 2026.8.16-ef2b65f5
 
-### Documentation
-
-- Modify README.md by @motoish
-
-### Miscellaneous Tasks
-
-- Update workflow by @motoish
-
-## 2026.8.16
-
 ### Bug Fixes
 
 - Change release version rule by @motoish
 
 ### Documentation
 
+- Modify README.md by @motoish
 - Modify README.md by @motoish
 
 ### Features
@@ -64,6 +69,7 @@
 ### Miscellaneous Tasks
 
 - Modify README.md by @motoish
+- Update workflow by @motoish
 
 ## 0.1.0
 
