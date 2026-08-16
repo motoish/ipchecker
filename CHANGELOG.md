@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026.8.16-ef2b65f5
+### Documentation
+
+- Modify README.md by @motoish
+
+
+### Miscellaneous Tasks
+
+- Update workflow by @motoish
+
+
 ## 2026.8.16
 ### Bug Fixes
 
