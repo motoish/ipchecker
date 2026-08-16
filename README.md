@@ -69,7 +69,7 @@ Useful run modes:
 
 Push to `main` runs format, Clippy, and tests first. Only if those pass does it create a GitHub Release. One push is one release, using the last commit.
 
-Each release is `YYYY.M.D-<sha8>` in Asia/Tokyo, for example `2026.8.16-a1b2c3d4` (Cargo versions cannot use `_`).
+Each push creates an immutable pre-release `YYYY.M.D-<sha8>` (for example `2026.8.16-a1b2c3d4`) and moves that day's stable release `v2026.8.16` to the same commit. GitHub's latest release is the daily stable tag. Cargo versions cannot use `_`, so the unique tag uses `-`.
 
 The workflow updates `Cargo.toml` + `Info.plist`, tags `vX.Y.Z`, then creates the GitHub Release and updates `CHANGELOG.md`.
 
