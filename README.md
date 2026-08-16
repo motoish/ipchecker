@@ -67,25 +67,14 @@ Useful run modes:
 
 ## Releasing
 
-Preferred: let GitHub Actions bump versions and tag.
+Push to `main` creates a GitHub Release. One push is one release, using the last commit.
 
-1. On GitHub → **Actions** → **Bump version** → **Run workflow**
-2. Choose `patch` / `minor` / `major`, or type an exact `x.y.z`
-3. The workflow updates `Cargo.toml` + `Info.plist`, commits to `main`, pushes `vX.Y.Z`, then runs **Release** in the same workflow (GitHub Release + `CHANGELOG.md` on `main`)
+- First release of the day is `YYYY.M.D` in Asia/Tokyo, for example `2026.8.16`
+- A later push on the same day is `YYYY.M.D-<sha8>`, for example `2026.8.16-a1b2c3d4` (Cargo versions cannot use `_`)
 
-Note: a tag pushed with `GITHUB_TOKEN` does not start other workflows, so Bump calls Release via `workflow_call` instead of relying on the tag event.
+The workflow updates `Cargo.toml` + `Info.plist`, tags `vX.Y.Z`, then creates the GitHub Release and updates `CHANGELOG.md`.
 
 About copy already uses `CARGO_PKG_VERSION`; locales do not need edits.
-
-Locally (optional):
-
-```bash
-./scripts/bump-version.sh patch   # or: minor | major | 0.3.0
-git add Cargo.toml resources/Info.plist
-git commit -m "chore(release): bump version to X.Y.Z"
-git tag vX.Y.Z
-git push origin main vX.Y.Z
-```
 
 Locally preview or regenerate changelog:
 
