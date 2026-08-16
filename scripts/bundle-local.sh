@@ -10,7 +10,7 @@ info_plist="$repo_dir/resources/Info.plist"
 app_icon="$repo_dir/resources/AppIcon.icns"
 lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
-cargo build --release --manifest-path "$repo_dir/Cargo.toml" --target-dir "$repo_dir/target"
+cargo build --locked --release --manifest-path "$repo_dir/Cargo.toml" --target-dir "$repo_dir/target"
 
 mkdir -p "$macos_dir" "$resources_dir"
 cp "$binary_path" "$macos_dir/ipchecker"
