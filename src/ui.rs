@@ -1,11 +1,33 @@
+#[cfg(target_os = "macos")]
+use std::cell::RefCell;
+
 use crate::{
     config::{ALLOWED_INTERVAL_MINUTES, Config},
     monitor::{MonitorOutcome, MonitorState},
+    net_speed::{NetworkSpeedLabels, TRAY_TITLE_WIDTH_TEMPLATE},
     session::Session,
 };
 use tray_icon::{
     BadIcon, Icon, TrayIcon, TrayIconBuilder,
     menu::{CheckMenuItem, Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu},
+};
+
+#[cfg(target_os = "macos")]
+use objc2::runtime::AnyObject;
+#[cfg(target_os = "macos")]
+use objc2::rc::Retained;
+#[cfg(target_os = "macos")]
+use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
+#[cfg(target_os = "macos")]
+use objc2_app_kit::{
+    NSAttributedStringNSStringDrawing, NSColor, NSCompositingOperation, NSFont, NSFontAttributeName,
+    NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle, NSParagraphStyleAttributeName,
+    NSRectFill, NSTextAlignment, NSTextTab, NSTextTabOptionKey, NSView,
+};
+#[cfg(target_os = "macos")]
+use objc2_foundation::{
+    NSArray, NSAttributedString, NSAttributedStringKey, NSDictionary, NSPoint, NSRect, NSSize,
+    NSString,
 };
 
 /// Installs an app `Edit` menu so ⌘X/C/V/A work in dialogs.
@@ -348,6 +370,8 @@ pub struct TrayUi {
     about_item: MenuItem,
     quit_item: MenuItem,
     icons: IconSet,
+    #[cfg(target_os = "macos")]
+    speed_title_view: Retained<SpeedTitleView>,
 }
 
 impl TrayUi {
@@ -412,8 +436,10 @@ impl TrayUi {
             .with_icon(icons.for_state(model.icon_state).clone())
             .with_icon_as_template(true)
             .build()?;
+        #[cfg(target_os = "macos")]
+        let speed_title_view = install_speed_title_view(&tray);
 
-        Ok(Self {
+        let ui = Self {
             tray,
             current_item,
             expected_item,
@@ -425,7 +451,11 @@ impl TrayUi {
             about_item,
             quit_item,
             icons,
-        })
+            #[cfg(target_os = "macos")]
+            speed_title_view,
+        };
+        ui.set_network_speed(&NetworkSpeedLabels::unknown());
+        Ok(ui)
     }
 
     pub fn apply(&self, model: &UiModel) -> Result<(), UiError> {
@@ -450,6 +480,13 @@ impl TrayUi {
 
     pub fn set_current_title(&self, title: &str) {
         self.current_item.set_text(title);
+    }
+
+    pub fn set_network_speed(&self, labels: &NetworkSpeedLabels) {
+        #[cfg(target_os = "macos")]
+        set_tray_speed_title(&self.tray, &self.speed_title_view, &labels.tray_title());
+        #[cfg(not(target_os = "macos"))]
+        let _ = labels;
     }
 
     pub fn menu_action(&self, id: &MenuId) -> Option<MenuAction> {
@@ -480,4 +517,242 @@ impl TrayUi {
             .find(|interval| id == interval.item.id())
             .map(|interval| MenuAction::SetInterval(interval.minutes))
     }
+}
+
+#[cfg(target_os = "macos")]
+const TRAY_ICON_POINTS: f64 = 18.0;
+#[cfg(target_os = "macos")]
+const TRAY_ICON_TEXT_GAP: f64 = 3.0;
+#[cfg(target_os = "macos")]
+const SPEED_FONT_SIZE: f64 = 9.0;
+#[cfg(target_os = "macos")]
+const SPEED_LINE_HEIGHT: f64 = 10.0;
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct SpeedTitleIvars {
+    attributed: RefCell<Retained<NSAttributedString>>,
+    icon: RefCell<Option<Retained<NSImage>>>,
+}
+
+#[cfg(target_os = "macos")]
+define_class!(
+    #[unsafe(super(NSView))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "IpcheckerSpeedTitleView"]
+    #[ivars = SpeedTitleIvars]
+    struct SpeedTitleView;
+
+    impl SpeedTitleView {
+        #[unsafe(method(drawRect:))]
+        fn draw_rect(&self, _dirty_rect: NSRect) {
+            let bounds = self.bounds();
+            let ivars = self.ivars();
+            let icon = ivars.icon.borrow();
+            let attributed = ivars.attributed.borrow();
+            let icon_size = icon
+                .as_ref()
+                .map(|image| image.size())
+                .unwrap_or(NSSize::new(TRAY_ICON_POINTS, TRAY_ICON_POINTS));
+            let icon_y = ((bounds.size.height - icon_size.height) / 2.0).round();
+            if let Some(image) = icon.as_ref() {
+                let icon_rect = NSRect::new(NSPoint::new(0.0, icon_y), icon_size);
+                NSColor::labelColor().set();
+                NSRectFill(icon_rect);
+                image.drawInRect_fromRect_operation_fraction(
+                    icon_rect,
+                    NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)),
+                    NSCompositingOperation::DestinationIn,
+                    1.0,
+                );
+            }
+
+            let text_size = attributed.size();
+            let text_x = icon_size.width + TRAY_ICON_TEXT_GAP;
+            let text_y = (icon_y + (icon_size.height - text_size.height) / 2.0).round();
+            attributed.drawAtPoint(NSPoint::new(text_x, text_y));
+        }
+
+        #[unsafe(method(allowsVibrancy))]
+        fn allows_vibrancy(&self) -> bool {
+            true
+        }
+
+        #[unsafe(method_id(hitTest:))]
+        fn hit_test(&self, _point: NSPoint) -> Option<Retained<NSView>> {
+            None
+        }
+    }
+);
+
+#[cfg(target_os = "macos")]
+impl SpeedTitleView {
+    fn new(mtm: MainThreadMarker, attributed: Retained<NSAttributedString>) -> Retained<Self> {
+        let view = mtm.alloc().set_ivars(SpeedTitleIvars {
+            attributed: RefCell::new(attributed),
+            icon: RefCell::new(None),
+        });
+        unsafe { msg_send![super(view), init] }
+    }
+
+    fn set_attributed(&self, attributed: Retained<NSAttributedString>) {
+        *self.ivars().attributed.borrow_mut() = attributed;
+        self.setNeedsDisplay(true);
+    }
+
+    fn set_icon(&self, icon: Retained<NSImage>) {
+        *self.ivars().icon.borrow_mut() = Some(icon);
+        self.setNeedsDisplay(true);
+    }
+
+    fn icon_size(&self) -> NSSize {
+        self.ivars()
+            .icon
+            .borrow()
+            .as_ref()
+            .map(|image| image.size())
+            .unwrap_or(NSSize::new(TRAY_ICON_POINTS, TRAY_ICON_POINTS))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn install_speed_title_view(tray: &TrayIcon) -> Retained<SpeedTitleView> {
+    let mtm = MainThreadMarker::new().expect("tray UI is created on the main thread");
+    let view = SpeedTitleView::new(mtm, speed_attributed_title("", &NSColor::labelColor()));
+    if let Some(status_item) = tray.ns_status_item()
+        && let Some(button) = status_item.button(mtm)
+    {
+        button.setTitle(&NSString::from_str(""));
+        button.addSubview(&view);
+    }
+    view
+}
+
+#[cfg(target_os = "macos")]
+fn set_tray_speed_title(
+    tray: &TrayIcon,
+    view: &SpeedTitleView,
+    title: &str,
+) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        log::warn!("skipped tray speed title; not on the main thread");
+        return;
+    };
+    let Some(status_item) = tray.ns_status_item() else {
+        return;
+    };
+    let Some(button) = status_item.button(mtm) else {
+        return;
+    };
+
+    button.setTitle(&NSString::from_str(""));
+    if let Some(image) = button.image() {
+        view.set_icon(image);
+        button.setImage(None);
+    }
+    if unsafe { view.superview() }.is_none() {
+        button.addSubview(view);
+    }
+
+    let attributed = speed_attributed_title(title, &NSColor::labelColor());
+    let template = speed_attributed_title(TRAY_TITLE_WIDTH_TEMPLATE, &NSColor::labelColor());
+    let text_width = template.size().width.max(attributed.size().width);
+    let icon_size = view.icon_size();
+    let width = icon_size.width + TRAY_ICON_TEXT_GAP + text_width;
+    status_item.setLength(width);
+    view.set_attributed(attributed);
+    view.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(width, button.bounds().size.height),
+    ));
+}
+
+#[cfg(target_os = "macos")]
+fn speed_attributed_title(title: &str, color: &NSColor) -> Retained<NSAttributedString> {
+    let font = NSFont::systemFontOfSize(SPEED_FONT_SIZE);
+    let paragraph = speed_paragraph_style(&font, title);
+    let font_obj: &AnyObject = font.as_ref();
+    let paragraph_obj: &AnyObject = paragraph.as_ref();
+    let color_obj: &AnyObject = color.as_ref();
+    let attrs = NSDictionary::<NSAttributedStringKey, AnyObject>::from_slices(
+        &[
+            unsafe { NSFontAttributeName },
+            unsafe { NSParagraphStyleAttributeName },
+            unsafe { NSForegroundColorAttributeName },
+        ],
+        &[font_obj, paragraph_obj, color_obj],
+    );
+    unsafe {
+        NSAttributedString::initWithString_attributes(
+            NSAttributedString::alloc(),
+            &NSString::from_str(title),
+            Some(&attrs),
+        )
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn speed_paragraph_style(font: &NSFont, title: &str) -> Retained<NSMutableParagraphStyle> {
+    let arrow_width = font_width("↑", font).max(font_width("↓", font));
+    let number_width = title_number_width(title, font);
+    let gap = font_width(" ", font);
+    let number_tab_x = arrow_width + number_width;
+    let unit_tab_x = number_tab_x + gap;
+
+    let options = NSDictionary::<NSTextTabOptionKey, AnyObject>::from_slices(
+        &[] as &[&NSString],
+        &[] as &[&AnyObject],
+    );
+    let number_tab = unsafe {
+        NSTextTab::initWithTextAlignment_location_options(
+            NSTextTab::alloc(),
+            NSTextAlignment::Right,
+            number_tab_x,
+            &options,
+        )
+    };
+    let unit_tab = unsafe {
+        NSTextTab::initWithTextAlignment_location_options(
+            NSTextTab::alloc(),
+            NSTextAlignment::Left,
+            unit_tab_x,
+            &options,
+        )
+    };
+
+    let paragraph = NSMutableParagraphStyle::new();
+    paragraph.setAlignment(NSTextAlignment::Left);
+    paragraph.setLineSpacing(0.0);
+    paragraph.setParagraphSpacing(0.0);
+    paragraph.setMinimumLineHeight(SPEED_LINE_HEIGHT);
+    paragraph.setMaximumLineHeight(SPEED_LINE_HEIGHT);
+    paragraph.setDefaultTabInterval(0.0);
+    paragraph.setTabStops(Some(&NSArray::from_retained_slice(&[number_tab, unit_tab])));
+    paragraph
+}
+
+#[cfg(target_os = "macos")]
+fn title_number_width(title: &str, font: &NSFont) -> f64 {
+    title
+        .lines()
+        .filter_map(|line| line.split('\t').nth(1))
+        .map(|number| font_width(number, font))
+        .fold(font_width("99.9", font), f64::max)
+}
+
+#[cfg(target_os = "macos")]
+fn font_width(text: &str, font: &NSFont) -> f64 {
+    let font_obj: &AnyObject = font.as_ref();
+    let attrs = NSDictionary::<NSAttributedStringKey, AnyObject>::from_slices(
+        &[unsafe { NSFontAttributeName }],
+        &[font_obj],
+    );
+    let attributed = unsafe {
+        NSAttributedString::initWithString_attributes(
+            NSAttributedString::alloc(),
+            &NSString::from_str(text),
+            Some(&attrs),
+        )
+    };
+    attributed.size().width
 }

@@ -1,6 +1,9 @@
 #[cfg(target_os = "macos")]
 mod macos {
-    use std::{thread, time::Duration};
+    use std::{
+        thread,
+        time::{Duration, Instant},
+    };
 
     use arboard::Clipboard;
     use ipchecker::{
@@ -14,6 +17,9 @@ mod macos {
         ip_input::prompt_expected_ip,
         ip_source::ReqwestIpSource,
         monitor::{Monitor, MonitorOutcome, MonitorState},
+        net_speed::{
+            NetworkSpeedLabels, NetworkSpeedSampler, SAMPLE_INTERVAL, read_interface_counters,
+        },
         notification::{ActionSink, MacNotifier, NotificationAction, Notifier},
         session::Session,
         ui::{FeedbackRestoreGuard, TrayUi, UiCommand, UiModel, install_app_edit_menu},
@@ -33,6 +39,7 @@ mod macos {
         Notification(NotificationAction),
         NotifierReady(Result<MacNotifier, String>),
         RestoreExpectedTitle(u64),
+        NetworkSpeed(NetworkSpeedLabels),
     }
 
     #[derive(Clone)]
@@ -79,6 +86,7 @@ mod macos {
         feedback_restore: FeedbackRestoreGuard,
         /// Retained so Edit key equivalents stay registered for dialogs.
         app_edit_menu: Option<Menu>,
+        speed_labels: NetworkSpeedLabels,
         initialized: bool,
     }
 
@@ -104,6 +112,7 @@ mod macos {
                 worker: None,
                 feedback_restore: FeedbackRestoreGuard::default(),
                 app_edit_menu: None,
+                speed_labels: NetworkSpeedLabels::unknown(),
                 initialized: false,
             }
         }
@@ -126,6 +135,7 @@ mod macos {
                 Ok(tray_ui) => self.tray_ui = Some(tray_ui),
                 Err(error) => log::error!("failed to create tray UI: {error}"),
             }
+            self.start_network_speed_sampler();
 
             match ReqwestIpSource::new() {
                 Ok(source) => {
@@ -184,6 +194,13 @@ mod macos {
                     if self.feedback_restore.claim(token) {
                         self.render_ui();
                     }
+                }
+                UserEvent::NetworkSpeed(labels) => {
+                    if self.speed_labels == labels {
+                        return;
+                    }
+                    self.speed_labels = labels;
+                    self.apply_network_speed();
                 }
             }
         }
@@ -390,6 +407,40 @@ mod macos {
             };
             if let Err(error) = tray_ui.apply(&self.ui_model()) {
                 log::warn!("failed to update tray UI: {error}");
+            }
+            tray_ui.set_network_speed(&self.speed_labels);
+        }
+
+        fn apply_network_speed(&self) {
+            let Some(tray_ui) = &self.tray_ui else {
+                return;
+            };
+            tray_ui.set_network_speed(&self.speed_labels);
+        }
+
+        fn start_network_speed_sampler(&self) {
+            let proxy = self.proxy.clone();
+            let spawn = thread::Builder::new()
+                .name("ipchecker-net-speed".to_owned())
+                .spawn(move || {
+                    let mut sampler = NetworkSpeedSampler::default();
+                    loop {
+                        let labels = match read_interface_counters() {
+                            Ok(counters) => sampler.observe(Instant::now(), counters).clone(),
+                            Err(error) => {
+                                log::warn!("failed to read interface counters: {error}");
+                                sampler.observe_failure().clone()
+                            }
+                        };
+                        if proxy.send_event(UserEvent::NetworkSpeed(labels)).is_err() {
+                            log::debug!("network speed sample arrived after the event loop closed");
+                            break;
+                        }
+                        thread::sleep(SAMPLE_INTERVAL);
+                    }
+                });
+            if let Err(error) = spawn {
+                log::warn!("failed to start network speed sampler: {error}");
             }
         }
     }
