@@ -77,7 +77,7 @@ pub fn about_build_time_line() -> String {
 #[cfg(target_os = "macos")]
 fn about_icon_image() -> Option<Retained<NSImage>> {
     // Always use the transparent glyph asset. The Finder AppIcon has an opaque
-    // plate that shows up as a white box inside NSAlert.
+    // plate that shows up as a white box in the About window.
     let data = NSData::with_bytes(ABOUT_ICON_PNG);
     NSImage::initWithData(NSImage::alloc(), &data)
 }
