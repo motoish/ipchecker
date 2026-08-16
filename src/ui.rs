@@ -20,8 +20,8 @@ use objc2::runtime::AnyObject;
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
-    NSAttributedStringNSStringDrawing, NSColor, NSCompositingOperation, NSFont,
-    NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle,
+    NSAttributedStringNSStringDrawing, NSCellImagePosition, NSColor, NSCompositingOperation,
+    NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle,
     NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab, NSTextTabOptionKey,
     NSView,
 };
@@ -555,6 +555,9 @@ impl TrayUi {
 const TRAY_ICON_POINTS: f64 = 18.0;
 #[cfg(target_os = "macos")]
 const TRAY_ICON_TEXT_GAP: f64 = 3.0;
+/// NSStatusBarButton keeps a trailing inset after we draw from x = 0.
+#[cfg(target_os = "macos")]
+const TRAY_TRAILING_TRIM: f64 = 6.0;
 #[cfg(target_os = "macos")]
 const SPEED_FONT_SIZE: f64 = 9.0;
 #[cfg(target_os = "macos")]
@@ -655,6 +658,7 @@ fn install_speed_title_view(tray: &TrayIcon) -> Retained<SpeedTitleView> {
         && let Some(button) = status_item.button(mtm)
     {
         button.setTitle(&NSString::from_str(""));
+        button.setImagePosition(NSCellImagePosition::NoImage);
         button.addSubview(&view);
     }
     view
@@ -681,6 +685,7 @@ fn set_tray_speed_title(tray: &TrayIcon, view: &SpeedTitleView, title: &str, is_
 
     view.setHidden(false);
     button.setTitle(&NSString::from_str(""));
+    button.setImagePosition(NSCellImagePosition::NoImage);
     if let Some(image) = button.image() {
         view.set_icon(image);
         button.setImage(None);
@@ -693,7 +698,8 @@ fn set_tray_speed_title(tray: &TrayIcon, view: &SpeedTitleView, title: &str, is_
     let template = speed_attributed_title(TRAY_TITLE_WIDTH_TEMPLATE, &NSColor::labelColor());
     let text_width = template.size().width.max(attributed.size().width);
     let icon_size = view.icon_size();
-    let width = icon_size.width + TRAY_ICON_TEXT_GAP + text_width;
+    let content_width = icon_size.width + TRAY_ICON_TEXT_GAP + text_width;
+    let width = (content_width - TRAY_TRAILING_TRIM).max(icon_size.width);
     status_item.setLength(width);
     view.set_attributed(attributed);
     view.setFrame(NSRect::new(
