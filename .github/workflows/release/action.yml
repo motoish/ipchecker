@@ -1,5 +1,5 @@
 name: Release
-description: Create the GitHub Release and update CHANGELOG.md
+description: Create the unique pre-release and update the daily stable GitHub Release
 
 inputs:
   tag:
@@ -20,6 +20,7 @@ runs:
       env:
         OUTPUT: CHANGES.md
         GITHUB_REPO: ${{ github.repository }}
+        GITHUB_TOKEN: ${{ github.token }}
 
     - name: Create unique GitHub Release
       uses: softprops/action-gh-release@v3
@@ -44,23 +45,3 @@ runs:
         make_latest: true
       env:
         GITHUB_TOKEN: ${{ github.token }}
-
-    - name: Generate CHANGELOG.md
-      uses: orhun/git-cliff-action@v4
-      with:
-        config: cliff.toml
-      env:
-        OUTPUT: CHANGELOG.md
-        GITHUB_REPO: ${{ github.repository }}
-
-    - name: Commit and push CHANGELOG.md
-      shell: bash
-      run: |
-        set -euo pipefail
-        git add CHANGELOG.md
-        if git diff --staged --quiet; then
-          echo "CHANGELOG.md already up to date"
-          exit 0
-        fi
-        git commit -m "chore(release): update CHANGELOG.md for ${{ inputs.tag }} [skip ci]"
-        git push origin HEAD:main

@@ -1,5 +1,5 @@
 name: Bump version
-description: Set today's CalVer, commit version files, and push the git tag
+description: Set today's CalVer, update CHANGELOG.md, commit once, and push the git tags
 
 outputs:
   version:
@@ -24,13 +24,23 @@ runs:
       shell: bash
       run: ./scripts/bump-version.sh
 
+    - name: Generate CHANGELOG.md
+      uses: orhun/git-cliff-action@v4
+      with:
+        config: cliff.toml
+        args: --tag ${{ steps.bump.outputs.tag }}
+      env:
+        OUTPUT: CHANGELOG.md
+        GITHUB_REPO: ${{ github.repository }}
+        GITHUB_TOKEN: ${{ github.token }}
+
     - name: Commit version bump
       shell: bash
       run: |
         set -euo pipefail
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add Cargo.toml Cargo.lock resources/Info.plist
+        git add Cargo.toml Cargo.lock resources/Info.plist CHANGELOG.md
         if git diff --staged --quiet; then
           echo "No version file changes; refusing to tag" >&2
           exit 1
