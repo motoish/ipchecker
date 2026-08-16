@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026.8.16
+### Bug Fixes
+
+- Change release version rule by @motoish
+
+
+### Documentation
+
+- Modify README.md by @motoish
+
+
+### Features
+
+- Add network bandwidth display by @motoish
+
+- Make bandwidth display optional by @motoish
+
+
+### Miscellaneous Tasks
+
+- Modify README.md by @motoish
+
+
 ## 0.1.0
 ### Miscellaneous Tasks
 
