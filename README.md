@@ -46,8 +46,8 @@ The network-speed menu toggle is saved there as `show_network_speed` (default `t
 
 ```bash
 cargo fmt --check
-cargo test --all-targets
-cargo clippy --all-targets -- -D warnings
+cargo test --locked --all-targets
+cargo clippy --locked --all-targets -- -D warnings
 ```
 
 Build the app without launching it:
@@ -71,9 +71,9 @@ Push to `main` runs format, Clippy, and tests first. Only if those pass does it 
 
 Each push creates an immutable pre-release `YYYY.M.D-<sha8>` (for example `2026.8.16-a1b2c3d4`) and moves that day's stable release `v2026.8.16` to the same commit. GitHub's latest release is the daily stable tag. Cargo versions cannot use `_`, so the unique tag uses `-`.
 
-The workflow updates `Cargo.toml` + `Info.plist`, tags `vX.Y.Z`, then creates the GitHub Release and updates `CHANGELOG.md`.
+The workflow updates `Cargo.toml`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases.
 
-About copy already uses `CARGO_PKG_VERSION`; locales do not need edits.
+About shows the stable CalVer date (for example `2026.8.17`). Locales do not need edits.
 
 Locally preview or regenerate changelog:
 
