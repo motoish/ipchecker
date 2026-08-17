@@ -79,7 +79,7 @@ The release channels are:
 - `vYYYY.M.D`: fast-forward-only daily pre-release channel
 - `vYYYY.M`: manually promoted monthly stable release and GitHub `latest`
 
-Release metadata is prepared only in the CI checkout and is not committed. `CFBundleVersion` uses the main-branch commit count. The update manifest records that numeric build, exact archive size, and SHA-256 checksum, and points to the immutable build asset.
+Release metadata is prepared only in the CI checkout and is not committed. The app is bundled before tags are created. The same unix epoch is passed to [`motoish/calver-release-action`](https://github.com/motoish/calver-release-action), which refuses to create tags if the version does not match. `CFBundleVersion` uses the main-branch commit count. The update manifest records that numeric build, exact archive size, and SHA-256 checksum, and points to the immutable build asset.
 
 To publish a stable update, open **Actions → Promote stable release → Run workflow** and enter an immutable tag such as `v2026.8.17-a1b2c3d4`. Promotion copies the selected build's `ipchecker.zip` and `update.json` to `vYYYY.M`. If that monthly tag already points to another commit, promotion fails instead of replacing it.
 
