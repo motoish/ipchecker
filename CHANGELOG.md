@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.8.17-9f78eea9
+
+### Documentation
+
+- Modify README.md by @motoish
+
+### Miscellaneous Tasks
+
+- Mdoify restore rust cache by @motoish
+
 ## 2026.8.17-21537789
 
 ### Miscellaneous Tasks
