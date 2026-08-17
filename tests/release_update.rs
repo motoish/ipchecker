@@ -1,4 +1,4 @@
-use std::{fs, path::Path, process::Command};
+use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
 use serde_json::Value;
 
@@ -88,6 +88,28 @@ fn run_commit_count(directory: &Path) -> std::process::Output {
         .unwrap()
 }
 
+fn run_commit_release_metadata(
+    directory: &Path,
+    version: &str,
+    expected_head: &str,
+) -> std::process::Output {
+    Command::new("bash")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/commit-release-metadata.sh"))
+        .arg(version)
+        .arg(expected_head)
+        .current_dir(directory)
+        .output()
+        .unwrap()
+}
+
+fn run_verify_app_archive(archive: &Path) -> std::process::Output {
+    Command::new("bash")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/verify-app-archive.sh"))
+        .arg(archive)
+        .output()
+        .unwrap()
+}
+
 fn git(directory: &Path, args: &[&str]) -> std::process::Output {
     Command::new("git")
         .args(args)
@@ -124,6 +146,62 @@ fn git_repo_with_commits(count: usize) -> tempfile::TempDir {
             .success()
         );
     }
+    directory
+}
+
+fn release_metadata_repo() -> tempfile::TempDir {
+    let directory = tempfile::tempdir().unwrap();
+    let work = directory.path().join("work");
+    let remote = directory.path().join("remote.git");
+    fs::create_dir(&work).unwrap();
+    fs::create_dir(&remote).unwrap();
+    fs::create_dir(work.join("resources")).unwrap();
+    fs::create_dir(work.join("scripts")).unwrap();
+
+    assert!(git(&remote, &["init", "--bare"]).status.success());
+    assert!(git(&work, &["init", "-b", "main"]).status.success());
+    fs::write(work.join("Cargo.toml"), "old cargo manifest\n").unwrap();
+    fs::write(work.join("Cargo.lock"), "old cargo lock\n").unwrap();
+    fs::write(work.join("resources/Info.plist"), "old plist\n").unwrap();
+    fs::write(work.join("CHANGELOG.md"), "old changelog\n").unwrap();
+    fs::write(work.join("notes.txt"), "old notes\n").unwrap();
+    assert!(git(&work, &["add", "."]).status.success());
+    assert!(
+        git(
+            &work,
+            &[
+                "-c",
+                "user.name=ipchecker",
+                "-c",
+                "user.email=ipchecker@example.test",
+                "commit",
+                "--no-gpg-sign",
+                "-m",
+                "initial",
+            ],
+        )
+        .status
+        .success()
+    );
+    assert!(
+        git(
+            &work,
+            &["remote", "add", "origin", remote.to_str().unwrap()]
+        )
+        .status
+        .success()
+    );
+    assert!(
+        git(&work, &["push", "-u", "origin", "main"])
+            .status
+            .success()
+    );
+
+    fs::write(work.join("Cargo.toml"), "new cargo manifest\n").unwrap();
+    fs::write(work.join("Cargo.lock"), "new cargo lock\n").unwrap();
+    fs::write(work.join("resources/Info.plist"), "new plist\n").unwrap();
+    fs::write(work.join("CHANGELOG.md"), "new changelog\n").unwrap();
+    fs::write(work.join("notes.txt"), "unrelated local edit\n").unwrap();
     directory
 }
 
@@ -276,6 +354,249 @@ fn commit_count_reports_the_reachable_history_length() {
 }
 
 #[test]
+fn release_metadata_commit_pushes_exactly_the_generated_files() {
+    let directory = release_metadata_repo();
+    let work = directory.path().join("work");
+    let remote = directory.path().join("remote.git");
+    let before = git(&work, &["rev-parse", "HEAD"]);
+    let expected_head = String::from_utf8_lossy(&before.stdout);
+
+    let output = run_commit_release_metadata(&work, "2026.8.18-a1b2c3d4", expected_head.trim());
+    assert!(
+        output.status.success(),
+        "metadata commit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let subject = git(&work, &["log", "-1", "--pretty=%s"]);
+    assert_eq!(
+        String::from_utf8_lossy(&subject.stdout).trim(),
+        "chore(release): bump version to 2026.8.18-a1b2c3d4 [skip ci]"
+    );
+    let changed = git(
+        &work,
+        &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&changed.stdout),
+        "CHANGELOG.md\nCargo.lock\nCargo.toml\nresources/Info.plist\n"
+    );
+    let remote_head = git(&remote, &["rev-parse", "refs/heads/main"]);
+    let local_head = git(&work, &["rev-parse", "HEAD"]);
+    assert_eq!(remote_head.stdout, local_head.stdout);
+    let status = git(&work, &["status", "--short"]);
+    assert_eq!(String::from_utf8_lossy(&status.stdout), " M notes.txt\n");
+}
+
+#[test]
+fn release_metadata_commit_rejects_invalid_versions_without_committing() {
+    let directory = release_metadata_repo();
+    let work = directory.path().join("work");
+    let before = git(&work, &["rev-parse", "HEAD"]);
+    let expected_head = String::from_utf8_lossy(&before.stdout);
+
+    let output = run_commit_release_metadata(&work, "2026.08.18-latest", expected_head.trim());
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid release version"));
+    let after = git(&work, &["rev-parse", "HEAD"]);
+    assert_eq!(before.stdout, after.stdout);
+}
+
+#[test]
+fn release_metadata_commit_refuses_a_dirty_index_without_staging_more_files() {
+    let directory = release_metadata_repo();
+    let work = directory.path().join("work");
+    let before = git(&work, &["rev-parse", "HEAD"]);
+    let expected_head = String::from_utf8_lossy(&before.stdout);
+    assert!(git(&work, &["add", "notes.txt"]).status.success());
+
+    let output = run_commit_release_metadata(&work, "2026.8.18-a1b2c3d4", expected_head.trim());
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("index must be clean"));
+    let staged = git(&work, &["diff", "--cached", "--name-only"]);
+    assert_eq!(String::from_utf8_lossy(&staged.stdout), "notes.txt\n");
+}
+
+#[test]
+fn release_metadata_commit_pushes_only_the_files_that_changed() {
+    let directory = release_metadata_repo();
+    let work = directory.path().join("work");
+    fs::write(work.join("CHANGELOG.md"), "old changelog\n").unwrap();
+    let before = git(&work, &["rev-parse", "HEAD"]);
+    let expected_head = String::from_utf8_lossy(&before.stdout);
+
+    let output = run_commit_release_metadata(&work, "2026.8.18-a1b2c3d4", expected_head.trim());
+    assert!(
+        output.status.success(),
+        "metadata commit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let changed = git(
+        &work,
+        &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&changed.stdout),
+        "Cargo.lock\nCargo.toml\nresources/Info.plist\n"
+    );
+    let status = git(&work, &["status", "--short"]);
+    assert_eq!(String::from_utf8_lossy(&status.stdout), " M notes.txt\n");
+}
+
+#[test]
+fn release_metadata_commit_skips_when_main_already_has_the_same_files() {
+    let directory = release_metadata_repo();
+    let work = directory.path().join("work");
+    let remote = directory.path().join("remote.git");
+    let original = git(&work, &["rev-parse", "HEAD"]);
+    let expected_head = String::from_utf8_lossy(&original.stdout).trim().to_string();
+
+    let first = run_commit_release_metadata(&work, "2026.8.18-a1b2c3d4", &expected_head);
+    assert!(
+        first.status.success(),
+        "first metadata commit failed: {}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let bumped = git(&work, &["rev-parse", "HEAD"]);
+
+    assert!(
+        git(&work, &["reset", "--hard", &expected_head])
+            .status
+            .success()
+    );
+    fs::write(work.join("Cargo.toml"), "new cargo manifest\n").unwrap();
+    fs::write(work.join("Cargo.lock"), "new cargo lock\n").unwrap();
+    fs::write(work.join("resources/Info.plist"), "new plist\n").unwrap();
+    fs::write(work.join("CHANGELOG.md"), "new changelog\n").unwrap();
+    fs::write(work.join("notes.txt"), "unrelated local edit\n").unwrap();
+
+    let second = run_commit_release_metadata(&work, "2026.8.18-a1b2c3d4", &expected_head);
+    assert!(
+        second.status.success(),
+        "retry metadata commit failed: {}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    assert!(String::from_utf8_lossy(&second.stderr).contains("release metadata already on main"));
+    let remote_head = git(&remote, &["rev-parse", "refs/heads/main"]);
+    assert_eq!(remote_head.stdout, bumped.stdout);
+    let status = git(&work, &["status", "--short"]);
+    assert_eq!(
+        String::from_utf8_lossy(&status.stdout),
+        " M CHANGELOG.md\n M Cargo.lock\n M Cargo.toml\n M notes.txt\n M resources/Info.plist\n"
+    );
+}
+
+#[test]
+fn release_metadata_commit_refuses_when_main_moved_with_different_files() {
+    let directory = release_metadata_repo();
+    let work = directory.path().join("work");
+    let other = directory.path().join("other");
+    let original = git(&work, &["rev-parse", "HEAD"]);
+    let expected_head = String::from_utf8_lossy(&original.stdout).trim().to_string();
+
+    assert!(
+        git(
+            directory.path(),
+            &[
+                "clone",
+                directory.path().join("remote.git").to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        )
+        .status
+        .success()
+    );
+    fs::write(other.join("Cargo.toml"), "unrelated main update\n").unwrap();
+    assert!(git(&other, &["add", "Cargo.toml"]).status.success());
+    assert!(
+        git(
+            &other,
+            &[
+                "-c",
+                "user.name=ipchecker",
+                "-c",
+                "user.email=ipchecker@example.test",
+                "commit",
+                "--no-gpg-sign",
+                "-m",
+                "unrelated",
+            ],
+        )
+        .status
+        .success()
+    );
+    assert!(git(&other, &["push", "origin", "main"]).status.success());
+
+    let output = run_commit_release_metadata(&work, "2026.8.18-a1b2c3d4", &expected_head);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("main changed during release"));
+    let after = git(&work, &["rev-parse", "HEAD"]);
+    assert_eq!(original.stdout, after.stdout);
+}
+
+#[test]
+fn app_archive_verification_requires_the_bundled_executable_and_plist() {
+    let directory = tempfile::tempdir().unwrap();
+    let app = directory.path().join("ipchecker.app/Contents");
+    fs::create_dir_all(app.join("MacOS")).unwrap();
+    fs::write(app.join("MacOS/ipchecker"), b"binary").unwrap();
+    fs::set_permissions(
+        app.join("MacOS/ipchecker"),
+        fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    fs::write(
+        app.join("Info.plist"),
+        br#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.tanishi.ipchecker</string></dict></plist>
+"#,
+    )
+    .unwrap();
+    let valid = directory.path().join("valid.zip");
+    let non_executable = directory.path().join("non-executable.zip");
+    let invalid = directory.path().join("invalid.zip");
+    assert!(
+        Command::new("zip")
+            .args(["-q", "-r"])
+            .arg(&valid)
+            .arg("ipchecker.app")
+            .current_dir(directory.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::set_permissions(
+        app.join("MacOS/ipchecker"),
+        fs::Permissions::from_mode(0o644),
+    )
+    .unwrap();
+    assert!(
+        Command::new("zip")
+            .args(["-q", "-r"])
+            .arg(&non_executable)
+            .arg("ipchecker.app")
+            .current_dir(directory.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(directory.path().join("readme.txt"), b"missing app").unwrap();
+    assert!(
+        Command::new("zip")
+            .arg("-q")
+            .arg(&invalid)
+            .arg("readme.txt")
+            .current_dir(directory.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    assert!(run_verify_app_archive(&valid).status.success());
+    assert!(!run_verify_app_archive(&non_executable).status.success());
+    assert!(!run_verify_app_archive(&invalid).status.success());
+}
+
+#[test]
 fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let workflow = load_workflow(".github/workflows/ci.yml");
     let steps = workflow_steps(&workflow, "release");
@@ -307,12 +628,17 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let prepare_index = step_index(&steps, "Prepare app version");
     let bundle_index = step_index(&steps, "Bundle app");
     let zip_index = step_index(&steps, "Zip app");
+    let archive_check_index = step_index(&steps, "Verify app archive");
     let manifest_index = step_index(&steps, "Generate update manifest");
+    let changelog_index = step_index(&steps, "Generate CHANGELOG.md");
+    let main_check_index = step_index(&steps, "Confirm main is unchanged");
     let calver_index = steps
         .iter()
         .position(|step| step["id"] == "calver")
         .unwrap();
     let upload_index = step_index(&steps, "Upload immutable release assets");
+    let cache_index = step_index(&steps, "Save Rust cache");
+    let commit_index = step_index(&steps, "Commit release metadata");
     assert!(
         steps
             .iter()
@@ -321,10 +647,33 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     assert!(
         prepare_index < bundle_index
             && bundle_index < zip_index
-            && zip_index < manifest_index
-            && manifest_index < calver_index
+            && zip_index < archive_check_index
+            && archive_check_index < manifest_index
+            && manifest_index < changelog_index
+            && changelog_index < main_check_index
+            && main_check_index < calver_index
             && calver_index < upload_index
+            && upload_index < cache_index
+            && cache_index < commit_index
     );
+
+    assert_eq!(
+        steps[archive_check_index]["run"],
+        "bash scripts/verify-app-archive.sh ipchecker.zip"
+    );
+
+    let changelog = steps[changelog_index];
+    assert_eq!(changelog["uses"], "orhun/git-cliff-action@v4");
+    assert_eq!(changelog["env"]["OUTPUT"], "CHANGELOG.md");
+    assert_eq!(
+        changelog["with"]["args"],
+        "--tag ${{ steps.identity.outputs.build_tag }}"
+    );
+
+    let main_check_run = steps[main_check_index]["run"].as_str().unwrap();
+    assert!(main_check_run.contains("git fetch"));
+    assert!(main_check_run.contains("origin main"));
+    assert!(main_check_run.contains("$GITHUB_SHA"));
 
     let prepare = steps[prepare_index];
     let prepare_run = prepare["run"].as_str().unwrap();
@@ -354,6 +703,17 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let upload_run = upload["run"].as_str().unwrap();
     assert!(upload_run.contains("ipchecker.zip"));
     assert!(upload_run.contains("update.json"));
+
+    let commit = steps[commit_index];
+    assert_eq!(
+        commit["env"]["VERSION"],
+        "${{ steps.identity.outputs.version }}"
+    );
+    assert_eq!(commit["env"]["EXPECTED_HEAD"], "${{ github.sha }}");
+    assert_eq!(
+        commit["run"],
+        "bash scripts/commit-release-metadata.sh \"$VERSION\" \"$EXPECTED_HEAD\""
+    );
 }
 
 #[test]
@@ -361,6 +721,11 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     let workflow = load_workflow(".github/workflows/promote.yml");
     assert_eq!(workflow["permissions"]["contents"], "write");
     let steps = workflow_steps(&workflow, "promote");
+
+    let checkout_index = steps
+        .iter()
+        .position(|step| step["name"] == "Checkout repository")
+        .expect("checkout step");
 
     let download_index = steps
         .iter()
@@ -370,15 +735,36 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
         .iter()
         .position(|step| step["id"] == "calver")
         .expect("promotion Action step");
+    let preflight_index = steps
+        .iter()
+        .position(|step| step["name"] == "Verify immutable assets")
+        .expect("immutable asset verification step");
     let upload_index = steps
         .iter()
         .position(|step| step["name"] == "Upload stable assets")
         .expect("stable asset upload step");
-    assert!(download_index < calver_index && calver_index < upload_index);
+    let verify_index = steps
+        .iter()
+        .position(|step| step["name"] == "Verify stable assets")
+        .expect("stable asset verification step");
+    assert!(
+        checkout_index < download_index
+            && download_index < preflight_index
+            && preflight_index < calver_index
+            && calver_index < upload_index
+            && upload_index < verify_index
+    );
 
     let download_run = steps[download_index]["run"].as_str().unwrap();
     assert!(download_run.contains("ipchecker.zip"));
     assert!(download_run.contains("update.json"));
+    assert!(download_run.contains("--repo \"$GITHUB_REPOSITORY\""));
+
+    let preflight_run = steps[preflight_index]["run"].as_str().unwrap();
+    assert!(preflight_run.contains("test -s promoted/ipchecker.zip"));
+    assert!(preflight_run.contains("test -s promoted/update.json"));
+    assert!(preflight_run.contains("scripts/verify-app-archive.sh"));
+    assert!(preflight_run.contains("jq -e"));
 
     let calver = steps[calver_index];
     assert_eq!(calver["uses"], "motoish/calver-release-action@v1");
@@ -393,6 +779,17 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     let upload_run = steps[upload_index]["run"].as_str().unwrap();
     assert!(upload_run.contains("ipchecker.zip"));
     assert!(upload_run.contains("update.json"));
+    assert!(upload_run.contains("--repo \"$GITHUB_REPOSITORY\""));
+
+    let verify = steps[verify_index];
+    assert_eq!(
+        verify["env"]["STABLE_TAG"],
+        "${{ steps.calver.outputs.channel_tag }}"
+    );
+    let verify_run = verify["run"].as_str().unwrap();
+    assert!(verify_run.contains("gh release view"));
+    assert!(verify_run.contains("ipchecker.zip"));
+    assert!(verify_run.contains("update.json"));
 }
 
 #[test]

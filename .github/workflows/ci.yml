@@ -42,7 +42,7 @@ jobs:
   release:
     name: Release
     needs: check
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message || '', 'chore(release):') }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -85,6 +85,9 @@ jobs:
             target/release/bundle/ipchecker.app \
             ipchecker.zip
 
+      - name: Verify app archive
+        run: bash scripts/verify-app-archive.sh ipchecker.zip
+
       - name: Generate update manifest
         env:
           VERSION: ${{ steps.identity.outputs.version }}
@@ -99,6 +102,26 @@ jobs:
             "$BUILD_TAG" \
             "${{ github.repository }}" \
             update.json
+
+      - name: Generate CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag ${{ steps.identity.outputs.build_tag }}
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Confirm main is unchanged
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          remote_head=$(git rev-parse refs/remotes/origin/main)
+          if [[ "$remote_head" != "$GITHUB_SHA" ]]; then
+            echo "main changed during release: expected $GITHUB_SHA, got $remote_head" >&2
+            exit 1
+          fi
 
       - name: Publish CalVer release records
         id: calver
@@ -124,3 +147,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: macos
+
+      - name: Commit release metadata
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: bash scripts/commit-release-metadata.sh "$VERSION" "$EXPECTED_HEAD"

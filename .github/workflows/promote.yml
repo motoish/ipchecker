@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
       - name: Download immutable assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -28,6 +31,29 @@ jobs:
             --pattern 'ipchecker.zip' \
             --pattern 'update.json' \
             --dir promoted
+
+      - name: Verify immutable assets
+        run: |
+          set -euo pipefail
+          test -s promoted/ipchecker.zip
+          test -s promoted/update.json
+          bash scripts/verify-app-archive.sh promoted/ipchecker.zip
+          jq -e '
+            type == "object" and
+            (.version | type == "string") and
+            (.build | type == "number" and . > 0) and
+            (.size | type == "number" and . > 0) and
+            (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+            (.url | type == "string" and startswith("https://github.com/"))
+          ' promoted/update.json >/dev/null
+          expected_size=$(jq -r '.size' promoted/update.json)
+          actual_size=$(wc -c < promoted/ipchecker.zip | tr -d ' ')
+          expected_sha=$(jq -r '.sha256' promoted/update.json)
+          actual_sha=$(sha256sum promoted/ipchecker.zip | cut -d ' ' -f 1)
+          if [[ "$actual_size" != "$expected_size" || "$actual_sha" != "$expected_sha" ]]; then
+            echo "Immutable assets do not match update.json" >&2
+            exit 1
+          fi
 
       - name: Promote monthly stable release
         id: calver
@@ -47,3 +73,18 @@ jobs:
             promoted/update.json \
             --clobber \
             --repo "$GITHUB_REPOSITORY"
+
+      - name: Verify stable assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_TAG: ${{ steps.calver.outputs.channel_tag }}
+        run: |
+          set -euo pipefail
+          verified=$(gh release view "$STABLE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '[.assets[] | select((.name == "ipchecker.zip" or .name == "update.json") and .size > 0)] | length == 2')
+          if [[ "$verified" != "true" ]]; then
+            echo "Stable release $STABLE_TAG is missing ipchecker.zip or update.json" >&2
+            exit 1
+          fi
