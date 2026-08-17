@@ -40,9 +40,10 @@ jobs:
       - name: Upload stable assets
         env:
           GH_TOKEN: ${{ github.token }}
-          STABLE_TAG: ${{ steps.calver.outputs.channel_tag }}
+          STABLE_TAG: ${{ steps.release.outputs.stable_tag }}
         run: |
           gh release upload "$STABLE_TAG" \
             promoted/ipchecker.zip \
             promoted/update.json \
-            --clobber
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
