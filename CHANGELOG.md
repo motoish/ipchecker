@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026.8.17-444bb109
+
+### Bug Fixes
+
+- Stable version with stable assets by @motoish
+
+### Miscellaneous Tasks
+
+- Fix workflow error by @motoish
+
+## 2026.8.17-c1e80a1f
+
+### Miscellaneous Tasks
+
+- Modify upload stable assets by @motoish
+- Modify stable_tag by @motoish
+
+## 2026.8.17-7e91cffd
+
+### Miscellaneous Tasks
+
+- Modify gh release command by @motoish
+
+## 2026.8.17-16bde2a6
+
+### Bug Fixes
+
+- Optimization by @motoish
+
+### Documentation
+
+- Modify README.md by @motoish
+- Modify README.md by @motoish
+
+### Miscellaneous Tasks
+
+- Use calver-release-action by @motoish
+
 ## 2026.8.17-cedfa64b
 
 ### Documentation
