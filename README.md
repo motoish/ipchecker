@@ -73,7 +73,7 @@ Push to `main` runs format, Clippy, and tests first. Only if those pass does it 
 
 Each push creates an immutable pre-release `YYYY.M.D-<sha8>` (for example `2026.8.16-a1b2c3d4`) and moves that day's stable release `v2026.8.16` to the same commit. GitHub's latest release is the daily stable tag. Cargo versions cannot use `_`, so the unique tag uses `-`.
 
-The workflow updates `Cargo.toml`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases with a zipped `ipchecker.app`.
+The workflow updates `Cargo.toml`, `Cargo.lock`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases with a zipped `ipchecker.app`.
 
 About shows the stable CalVer date (for example `2026.8.17`). Locales do not need edits.
 
