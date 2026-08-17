@@ -1,0 +1,47 @@
+name: Promote stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: Immutable build tag, for example v2026.8.17-a1b2c3d4
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Promote monthly stable
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download immutable assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
+        run: |
+          mkdir promoted
+          gh release download "$SOURCE_TAG" \
+            --pattern ipchecker.zip \
+            --pattern update.json \
+            --dir promoted
+
+      - name: Promote monthly stable release
+        id: calver
+        uses: motoish/calver-release-action@v1
+        with:
+          mode: promote
+          source_tag: ${{ inputs.source_tag }}
+          token: ${{ github.token }}
+
+      - name: Upload stable assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_TAG: ${{ steps.calver.outputs.channel_tag }}
+        run: |
+          gh release upload "$STABLE_TAG" \
+            promoted/ipchecker.zip \
+            promoted/update.json \
+            --clobber

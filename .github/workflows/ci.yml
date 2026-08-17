@@ -42,7 +42,7 @@ jobs:
   release:
     name: Release
     needs: check
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message || '', 'chore(release):') }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -63,14 +63,24 @@ jobs:
           shared-key: macos
           save-if: "false"
 
-      - name: Bump version
-        id: bump
-        uses: ./.github/workflows/bump-version
+      - name: Verify app bundle
+        run: bash scripts/bundle-local.sh
 
-      - name: Save Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Publish CalVer release records
+        id: calver
+        uses: motoish/calver-release-action@v1
         with:
-          shared-key: macos
+          mode: daily
+          timezone: Asia/Tokyo
+          token: ${{ github.token }}
+
+      - name: Prepare app version
+        env:
+          VERSION: ${{ steps.calver.outputs.version }}
+        run: |
+          set -euo pipefail
+          build=$(git rev-list --count HEAD)
+          bash scripts/prepare-release-version.sh "$VERSION" "$build"
 
       - name: Bundle app
         run: bash scripts/bundle-local.sh
@@ -80,11 +90,34 @@ jobs:
           set -euo pipefail
           ditto -c -k --keepParent \
             target/release/bundle/ipchecker.app \
-            "ipchecker-${{ steps.bump.outputs.version }}.zip"
+            ipchecker.zip
 
-      - name: Release
-        uses: ./.github/workflows/release
+      - name: Generate update manifest
+        env:
+          VERSION: ${{ steps.calver.outputs.version }}
+          BUILD_TAG: ${{ steps.calver.outputs.build_tag }}
+        run: |
+          set -euo pipefail
+          build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' resources/Info.plist)
+          bash scripts/generate-update-manifest.sh \
+            ipchecker.zip \
+            "$VERSION" \
+            "$build" \
+            "$BUILD_TAG" \
+            "${{ github.repository }}" \
+            update.json
+
+      - name: Upload immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_TAG: ${{ steps.calver.outputs.build_tag }}
+        run: |
+          gh release upload "$BUILD_TAG" \
+            ipchecker.zip \
+            update.json \
+            --clobber
+
+      - name: Save Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          tag: ${{ steps.bump.outputs.tag }}
-          stable_tag: ${{ steps.bump.outputs.stable_tag }}
-          asset: ipchecker-${{ steps.bump.outputs.version }}.zip
+          shared-key: macos
