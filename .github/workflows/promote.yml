@@ -24,8 +24,9 @@ jobs:
         run: |
           mkdir promoted
           gh release download "$SOURCE_TAG" \
-            --pattern ipchecker.zip \
-            --pattern update.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'ipchecker.zip' \
+            --pattern 'update.json' \
             --dir promoted
 
       - name: Promote monthly stable release
