@@ -63,23 +63,16 @@ jobs:
           shared-key: macos
           save-if: "false"
 
-      - name: Verify app bundle
-        run: bash scripts/bundle-local.sh
-
-      - name: Publish CalVer release records
-        id: calver
-        uses: motoish/calver-release-action@v1
-        with:
-          mode: daily
-          timezone: Asia/Tokyo
-          token: ${{ github.token }}
+      - name: Compute CalVer identity
+        id: identity
+        run: bash scripts/calver-identity.sh Asia/Tokyo "$GITHUB_SHA" "$(date +%s)"
 
       - name: Prepare app version
         env:
-          VERSION: ${{ steps.calver.outputs.version }}
+          VERSION: ${{ steps.identity.outputs.version }}
         run: |
           set -euo pipefail
-          build=$(git rev-list --count HEAD)
+          build=$(bash scripts/commit-count.sh)
           bash scripts/prepare-release-version.sh "$VERSION" "$build"
 
       - name: Bundle app
@@ -94,8 +87,8 @@ jobs:
 
       - name: Generate update manifest
         env:
-          VERSION: ${{ steps.calver.outputs.version }}
-          BUILD_TAG: ${{ steps.calver.outputs.build_tag }}
+          VERSION: ${{ steps.identity.outputs.version }}
+          BUILD_TAG: ${{ steps.identity.outputs.build_tag }}
         run: |
           set -euo pipefail
           build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' resources/Info.plist)
@@ -106,6 +99,16 @@ jobs:
             "$BUILD_TAG" \
             "${{ github.repository }}" \
             update.json
+
+      - name: Publish CalVer release records
+        id: calver
+        uses: motoish/calver-release-action@v1
+        with:
+          mode: daily
+          timezone: Asia/Tokyo
+          now: ${{ steps.identity.outputs.epoch }}
+          expected_version: ${{ steps.identity.outputs.version }}
+          token: ${{ github.token }}
 
       - name: Upload immutable release assets
         env:

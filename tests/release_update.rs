@@ -59,6 +59,81 @@ fn run_prepare_version(directory: &Path, version: &str, build: &str) -> std::pro
         .unwrap()
 }
 
+fn run_identity(timezone: &str, sha: &str, epoch: &str) -> (std::process::Output, String) {
+    let directory = tempfile::tempdir().unwrap();
+    let github_output = directory.path().join("github_output");
+    fs::write(&github_output, "").unwrap();
+    let output = Command::new("bash")
+        .arg("scripts/calver-identity.sh")
+        .arg(timezone)
+        .arg(sha)
+        .arg(epoch)
+        .env("GITHUB_OUTPUT", &github_output)
+        .output()
+        .unwrap();
+    let written = fs::read_to_string(&github_output).unwrap();
+    (output, written)
+}
+
+fn run_commit_count(directory: &Path) -> std::process::Output {
+    Command::new("bash")
+        .arg(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("scripts/commit-count.sh")
+                .to_str()
+                .unwrap(),
+        )
+        .current_dir(directory)
+        .output()
+        .unwrap()
+}
+
+fn git(directory: &Path, args: &[&str]) -> std::process::Output {
+    Command::new("git")
+        .args(args)
+        .current_dir(directory)
+        .output()
+        .unwrap()
+}
+
+fn git_repo_with_commits(count: usize) -> tempfile::TempDir {
+    let directory = tempfile::tempdir().unwrap();
+    assert!(
+        git(directory.path(), &["init", "-b", "main"])
+            .status
+            .success()
+    );
+    for index in 1..=count {
+        fs::write(directory.path().join("file"), index.to_string()).unwrap();
+        assert!(git(directory.path(), &["add", "file"]).status.success());
+        assert!(
+            git(
+                directory.path(),
+                &[
+                    "-c",
+                    "user.name=ipchecker",
+                    "-c",
+                    "user.email=ipchecker@example.test",
+                    "commit",
+                    "--no-gpg-sign",
+                    "-m",
+                    &format!("commit {index}"),
+                ],
+            )
+            .status
+            .success()
+        );
+    }
+    directory
+}
+
+fn step_index(steps: &[&Value], name: &str) -> usize {
+    steps
+        .iter()
+        .position(|step| step["name"] == name)
+        .unwrap_or_else(|| panic!("workflow step {name:?} is missing"))
+}
+
 fn load_workflow(path: &str) -> Value {
     let output = Command::new("ruby")
         .arg("-ryaml")
@@ -143,6 +218,64 @@ fn release_version_preparation_rejects_invalid_version_or_build() {
 }
 
 #[test]
+fn calver_identity_uses_the_timezone_calendar_date_without_leading_zeros() {
+    let sha = "a1b2c3d4e5f6789012345678901234567890abcd";
+    let (tokyo_next_day, next_day_output) = run_identity("Asia/Tokyo", sha, "1786894200");
+    let (tokyo_same_day, same_day_output) = run_identity("Asia/Tokyo", sha, "1786890600");
+    let expected_next_day =
+        "version=2026.8.17-a1b2c3d4\nbuild_tag=v2026.8.17-a1b2c3d4\nepoch=1786894200\n";
+    let expected_same_day =
+        "version=2026.8.16-a1b2c3d4\nbuild_tag=v2026.8.16-a1b2c3d4\nepoch=1786890600\n";
+
+    assert!(tokyo_next_day.status.success());
+    assert!(tokyo_same_day.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&tokyo_next_day.stdout),
+        expected_next_day
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&tokyo_same_day.stdout),
+        expected_same_day
+    );
+    assert_eq!(next_day_output, expected_next_day);
+    assert_eq!(same_day_output, expected_same_day);
+}
+
+#[test]
+fn calver_identity_rejects_an_invalid_sha_or_timezone() {
+    let sha = "a1b2c3d4e5f6789012345678901234567890abcd";
+    assert!(
+        !run_identity("Asia/Tokyo", "deadbeef", "1786894200")
+            .0
+            .status
+            .success()
+    );
+    assert!(
+        !run_identity("Not/A_Zone", sha, "1786894200")
+            .0
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn commit_count_reports_the_reachable_history_length() {
+    let empty = tempfile::tempdir().unwrap();
+    let one = git_repo_with_commits(1);
+    let three = git_repo_with_commits(3);
+
+    assert!(!run_commit_count(empty.path()).status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&run_commit_count(one.path()).stdout).trim(),
+        "1"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&run_commit_count(three.path()).stdout).trim(),
+        "3"
+    );
+}
+
+#[test]
 fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let workflow = load_workflow(".github/workflows/ci.yml");
     let steps = workflow_steps(&workflow, "release");
@@ -152,45 +285,68 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
             .as_str()
             .is_some_and(|uses| uses.starts_with("./.github/workflows/"))
     }));
+    assert!(steps.iter().all(|step| step["name"] != "Verify app bundle"));
+
+    let identity = step_with_id(&steps, "identity");
+    let identity_run = identity["run"].as_str().unwrap();
+    assert!(identity_run.contains("scripts/calver-identity.sh"));
+    assert!(identity_run.contains("Asia/Tokyo"));
+    assert!(identity_run.contains("date +%s"));
 
     let calver = step_with_id(&steps, "calver");
     assert_eq!(calver["uses"], "motoish/calver-release-action@v1");
     assert_eq!(calver["with"]["mode"], "daily");
     assert_eq!(calver["with"]["timezone"], "Asia/Tokyo");
     assert_eq!(calver["with"]["token"], "${{ github.token }}");
+    assert_eq!(calver["with"]["now"], "${{ steps.identity.outputs.epoch }}");
+    assert_eq!(
+        calver["with"]["expected_version"],
+        "${{ steps.identity.outputs.version }}"
+    );
 
-    let bundle_check_index = steps
-        .iter()
-        .position(|step| step["name"] == "Verify app bundle")
-        .expect("bundle verification step");
+    let prepare_index = step_index(&steps, "Prepare app version");
+    let bundle_index = step_index(&steps, "Bundle app");
+    let zip_index = step_index(&steps, "Zip app");
+    let manifest_index = step_index(&steps, "Generate update manifest");
     let calver_index = steps
         .iter()
         .position(|step| step["id"] == "calver")
         .unwrap();
-    let prepare_index = steps
-        .iter()
-        .position(|step| step["name"] == "Prepare app version")
-        .unwrap();
-    assert!(bundle_check_index < calver_index && calver_index < prepare_index);
+    let upload_index = step_index(&steps, "Upload immutable release assets");
+    assert!(
+        steps
+            .iter()
+            .all(|step| step["name"] != "Confirm CalVer identity")
+    );
+    assert!(
+        prepare_index < bundle_index
+            && bundle_index < zip_index
+            && zip_index < manifest_index
+            && manifest_index < calver_index
+            && calver_index < upload_index
+    );
 
-    let prepare = steps
-        .iter()
-        .copied()
-        .find(|step| step["name"] == "Prepare app version")
-        .expect("version preparation step");
+    let prepare = steps[prepare_index];
     let prepare_run = prepare["run"].as_str().unwrap();
-    assert!(prepare_run.contains("git rev-list --count HEAD"));
+    assert!(prepare_run.contains("scripts/commit-count.sh"));
+    assert!(!prepare_run.contains("git rev-list"));
     assert!(prepare_run.contains("scripts/prepare-release-version.sh"));
     assert_eq!(
         prepare["env"]["VERSION"],
-        "${{ steps.calver.outputs.version }}"
+        "${{ steps.identity.outputs.version }}"
     );
 
-    let upload = steps
-        .iter()
-        .copied()
-        .find(|step| step["name"] == "Upload immutable release assets")
-        .expect("immutable asset upload step");
+    let manifest = steps[manifest_index];
+    assert_eq!(
+        manifest["env"]["VERSION"],
+        "${{ steps.identity.outputs.version }}"
+    );
+    assert_eq!(
+        manifest["env"]["BUILD_TAG"],
+        "${{ steps.identity.outputs.build_tag }}"
+    );
+
+    let upload = steps[upload_index];
     assert_eq!(
         upload["env"]["BUILD_TAG"],
         "${{ steps.calver.outputs.build_tag }}"
