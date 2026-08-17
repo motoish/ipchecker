@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026.8.17-cedfa64b
+
+### Documentation
+
+- Modify README.md by @motoish
+
+### Features
+
+- Add checking for update by @motoish
+
+### Miscellaneous Tasks
+
+- Generate update manifest by @motoish
+
 ## 2026.8.17-9f78eea9
 
 ### Documentation
