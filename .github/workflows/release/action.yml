@@ -43,12 +43,29 @@ runs:
       shell: bash
       run: cp "${{ inputs.asset }}" ipchecker.zip
 
-    - name: Replace previous stable app zip
+    - name: Generate update manifest
+      shell: bash
+      run: |
+        set -euo pipefail
+        version="${{ inputs.tag }}"
+        version="${version#v}"
+        build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' resources/Info.plist)
+        bash scripts/generate-update-manifest.sh \
+          "${{ inputs.asset }}" \
+          "$version" \
+          "$build" \
+          "${{ inputs.tag }}" \
+          "${{ github.repository }}" \
+          update.json
+
+    - name: Replace previous stable assets
       shell: bash
       run: |
         set -euo pipefail
         if gh release view "${{ inputs.stable_tag }}" >/dev/null 2>&1; then
-          gh release delete-asset "${{ inputs.stable_tag }}" ipchecker.zip --yes || true
+          for asset in ipchecker.zip update.json; do
+            gh release delete-asset "${{ inputs.stable_tag }}" "$asset" --yes || true
+          done
         fi
       env:
         GH_TOKEN: ${{ github.token }}
@@ -59,7 +76,9 @@ runs:
         tag_name: ${{ inputs.stable_tag }}
         name: ${{ inputs.stable_tag }}
         body_path: CHANGES.md
-        files: ipchecker.zip
+        files: |
+          ipchecker.zip
+          update.json
         fail_on_unmatched_files: true
         generate_release_notes: false
         prerelease: false
