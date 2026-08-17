@@ -5,6 +5,7 @@ menu.minutes: "%{minutes} 分钟"
 menu.check_now: 立即检查
 menu.show_network_speed: 显示上下行速度
 menu.mute_session: 本会话不再提醒
+menu.check_for_updates: 检查更新…
 menu.about: 关于 ipchecker…
 menu.quit: 退出
 status.current_ip: "当前公网 IP：%{ip}"
@@ -21,6 +22,19 @@ dialog.invalid_ipv4: 请输入有效的 IPv4 地址
 dialog.about_ok: 好
 dialog.about_version: "版本 %{version}"
 dialog.about_body: "监控公网 IPv4 的 macOS 菜单栏应用。"
+dialog.update_current_title: 已是最新版本
+dialog.update_current_body: "ipchecker %{version} 已是最新版本。"
+dialog.update_available_title: 有可用更新
+dialog.update_available_body: "现在下载 ipchecker %{version} 吗？"
+dialog.update_download: 下载
+dialog.update_cancel: 取消
+dialog.update_ready_title: 更新已准备好
+dialog.update_ready_body: "ipchecker %{version} 已保存到 %{path}。请退出当前应用，再将新应用拖入“应用程序”完成替换。"
+dialog.update_show_finder: 在 Finder 中显示
+dialog.update_error_title: 无法更新
+dialog.update_error_body: "无法检查或下载更新。你可以改为打开 GitHub Releases 页面。"
+dialog.update_open_releases: 打开 Releases
+dialog.update_ok: 好
 notify.mismatch_title: 公网 IP 与期望不符
 notify.mismatch_body: "当前 %{current}，期望 %{expected}"
 notify.fetch_failure_title: 无法获取公网 IP

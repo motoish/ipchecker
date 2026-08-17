@@ -5,6 +5,7 @@ menu.minutes: "%{minutes} min"
 menu.check_now: Check Now
 menu.show_network_speed: Show Network Speed
 menu.mute_session: Mute for This Session
+menu.check_for_updates: Check for Updates…
 menu.about: About ipchecker…
 menu.quit: Quit
 status.current_ip: "Current public IP: %{ip}"
@@ -21,6 +22,19 @@ dialog.invalid_ipv4: Please enter a valid IPv4 address
 dialog.about_ok: OK
 dialog.about_version: "Version %{version}"
 dialog.about_body: "A macOS menu bar app that watches your public IPv4."
+dialog.update_current_title: You're up to date
+dialog.update_current_body: "ipchecker %{version} is the latest version."
+dialog.update_available_title: Update available
+dialog.update_available_body: "Download ipchecker %{version} now?"
+dialog.update_download: Download
+dialog.update_cancel: Cancel
+dialog.update_ready_title: Update ready
+dialog.update_ready_body: "ipchecker %{version} was saved to %{path}. Quit the current app, then drag the new app into Applications to replace it."
+dialog.update_show_finder: Show in Finder
+dialog.update_error_title: Unable to update
+dialog.update_error_body: "The update could not be checked or downloaded. You can try the GitHub Releases page instead."
+dialog.update_open_releases: Open Releases
+dialog.update_ok: OK
 notify.mismatch_title: Public IP does not match expected
 notify.mismatch_body: "Current %{current}, expected %{expected}"
 notify.fetch_failure_title: Unable to get public IP

@@ -185,6 +185,7 @@ fn stateless_menu_actions_map_to_their_matching_commands() {
         (MenuAction::UseCurrentIp, UiCommand::UseCurrentIp),
         (MenuAction::CopyCurrentIp, UiCommand::CopyCurrentIp),
         (MenuAction::CheckNow, UiCommand::CheckNow),
+        (MenuAction::CheckForUpdates, UiCommand::CheckForUpdates),
         (MenuAction::About, UiCommand::About),
         (MenuAction::Quit, UiCommand::Quit),
     ] {

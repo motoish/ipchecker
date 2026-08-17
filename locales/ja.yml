@@ -5,6 +5,7 @@ menu.minutes: "%{minutes} 分"
 menu.check_now: 今すぐ確認
 menu.show_network_speed: 通信速度を表示
 menu.mute_session: このセッションでは通知しない
+menu.check_for_updates: アップデートを確認…
 menu.about: ipcheckerについて…
 menu.quit: 終了
 status.current_ip: "現在のグローバルIP：%{ip}"
@@ -21,6 +22,19 @@ dialog.invalid_ipv4: 有効なIPv4アドレスを入力してください
 dialog.about_ok: OK
 dialog.about_version: "バージョン %{version}"
 dialog.about_body: "グローバルIPv4を監視するmacOSメニューバーアプリ。"
+dialog.update_current_title: 最新バージョンです
+dialog.update_current_body: "ipchecker %{version} は最新バージョンです。"
+dialog.update_available_title: アップデートがあります
+dialog.update_available_body: "ipchecker %{version} を今すぐダウンロードしますか？"
+dialog.update_download: ダウンロード
+dialog.update_cancel: キャンセル
+dialog.update_ready_title: アップデートの準備ができました
+dialog.update_ready_body: "ipchecker %{version} を %{path} に保存しました。現在のアプリを終了し、新しいアプリをアプリケーションフォルダへドラッグして置き換えてください。"
+dialog.update_show_finder: Finderに表示
+dialog.update_error_title: アップデートできません
+dialog.update_error_body: "アップデートを確認またはダウンロードできませんでした。代わりにGitHub Releasesページを開くことができます。"
+dialog.update_open_releases: Releasesを開く
+dialog.update_ok: OK
 notify.mismatch_title: グローバルIPが期待と一致しません
 notify.mismatch_body: "現在 %{current}、期待 %{expected}"
 notify.fetch_failure_title: グローバルIPを取得できません

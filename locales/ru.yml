@@ -5,6 +5,7 @@ menu.minutes: "%{minutes} мин"
 menu.check_now: Проверить сейчас
 menu.show_network_speed: Показывать скорость сети
 menu.mute_session: Не уведомлять в этой сессии
+menu.check_for_updates: Проверить обновления…
 menu.about: О программе ipchecker…
 menu.quit: Выход
 status.current_ip: "Текущий публичный IP: %{ip}"
@@ -21,6 +22,19 @@ dialog.invalid_ipv4: Введите действительный адрес IPv4
 dialog.about_ok: OK
 dialog.about_version: "Версия %{version}"
 dialog.about_body: "Приложение в строке меню macOS для мониторинга публичного IPv4."
+dialog.update_current_title: Установлена последняя версия
+dialog.update_current_body: "ipchecker %{version} — последняя версия."
+dialog.update_available_title: Доступно обновление
+dialog.update_available_body: "Скачать ipchecker %{version} сейчас?"
+dialog.update_download: Скачать
+dialog.update_cancel: Отмена
+dialog.update_ready_title: Обновление готово
+dialog.update_ready_body: "ipchecker %{version} сохранён в %{path}. Завершите текущую версию и перетащите новую в папку «Программы» для замены."
+dialog.update_show_finder: Показать в Finder
+dialog.update_error_title: Не удалось обновить
+dialog.update_error_body: "Не удалось проверить или скачать обновление. Можно открыть страницу GitHub Releases."
+dialog.update_open_releases: Открыть Releases
+dialog.update_ok: OK
 notify.mismatch_title: Публичный IP не совпадает с ожидаемым
 notify.mismatch_body: "Текущий %{current}, ожидаемый %{expected}"
 notify.fetch_failure_title: Не удалось получить публичный IP

@@ -128,6 +128,7 @@ pub enum MenuAction {
     CheckNow,
     ToggleMuted,
     ToggleShowNetworkSpeed,
+    CheckForUpdates,
     About,
     Quit,
 }
@@ -141,6 +142,7 @@ pub enum UiCommand {
     CheckNow,
     SetMuted(bool),
     SetShowNetworkSpeed(bool),
+    CheckForUpdates,
     About,
     Quit,
 }
@@ -159,6 +161,7 @@ impl UiCommand {
             MenuAction::CheckNow => Self::CheckNow,
             MenuAction::ToggleMuted => Self::SetMuted(!is_muted),
             MenuAction::ToggleShowNetworkSpeed => Self::SetShowNetworkSpeed(!is_show_network_speed),
+            MenuAction::CheckForUpdates => Self::CheckForUpdates,
             MenuAction::About => Self::About,
             MenuAction::Quit => Self::Quit,
         }
@@ -391,6 +394,7 @@ pub struct TrayUi {
     check_now_item: MenuItem,
     show_network_speed_item: CheckMenuItem,
     mute_item: CheckMenuItem,
+    check_for_updates_item: MenuItem,
     about_item: MenuItem,
     quit_item: MenuItem,
     icons: IconSet,
@@ -432,6 +436,8 @@ impl TrayUi {
         );
         let mute_item =
             CheckMenuItem::new(t!("menu.mute_session").as_ref(), true, model.muted, None);
+        let check_for_updates_item =
+            MenuItem::new(t!("menu.check_for_updates").as_ref(), true, None);
         let about_item = MenuItem::new(t!("menu.about").as_ref(), true, None);
         let quit_item = MenuItem::new(t!("menu.quit").as_ref(), true, None);
         let separators = [
@@ -455,6 +461,7 @@ impl TrayUi {
             &show_network_speed_item,
             &mute_item,
             &separators[3],
+            &check_for_updates_item,
             &about_item,
             &separators[4],
             &quit_item,
@@ -480,6 +487,7 @@ impl TrayUi {
             check_now_item,
             show_network_speed_item,
             mute_item,
+            check_for_updates_item,
             about_item,
             quit_item,
             icons,
@@ -531,6 +539,10 @@ impl TrayUi {
         }
     }
 
+    pub fn set_check_for_updates_enabled(&self, enabled: bool) {
+        self.check_for_updates_item.set_enabled(enabled);
+    }
+
     pub fn menu_action(&self, id: &MenuId) -> Option<MenuAction> {
         if id == self.current_item.id() {
             return Some(MenuAction::CopyCurrentIp);
@@ -549,6 +561,9 @@ impl TrayUi {
         }
         if id == self.mute_item.id() {
             return Some(MenuAction::ToggleMuted);
+        }
+        if id == self.check_for_updates_item.id() {
+            return Some(MenuAction::CheckForUpdates);
         }
         if id == self.about_item.id() {
             return Some(MenuAction::About);

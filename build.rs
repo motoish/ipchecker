@@ -1,4 +1,5 @@
 use std::env;
+use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
@@ -21,4 +22,20 @@ fn main() {
                 .unwrap_or(0)
         });
     println!("cargo:rustc-env=IPCHECKER_BUILD_UNIX_SECS={secs}");
+
+    let info_plist = fs::read_to_string("resources/Info.plist")
+        .expect("resources/Info.plist must be readable at build time");
+    let build = plist_string(&info_plist, "CFBundleVersion")
+        .expect("CFBundleVersion must exist in resources/Info.plist");
+    build
+        .parse::<u64>()
+        .expect("CFBundleVersion must be a positive integer");
+    println!("cargo:rustc-env=IPCHECKER_BUILD_NUMBER={build}");
+}
+
+fn plist_string<'a>(plist: &'a str, key: &str) -> Option<&'a str> {
+    let marker = format!("<key>{key}</key>");
+    let after_key = plist.split_once(&marker)?.1;
+    let after_open = after_key.split_once("<string>")?.1;
+    Some(after_open.split_once("</string>")?.0.trim())
 }

@@ -24,6 +24,13 @@ mod macos {
         notification::{ActionSink, MacNotifier, NotificationAction, Notifier},
         session::Session,
         ui::{FeedbackRestoreGuard, TrayUi, UiCommand, UiModel, install_app_edit_menu},
+        update::{
+            UpdateError, UpdateRelease, UpdateStatus, check_for_updates, download_and_extract,
+            open_releases_page, reveal_in_finder,
+        },
+        update_dialog::{
+            confirm_update_download, show_current_version, show_update_error, show_update_ready,
+        },
     };
     use tao::{
         event::{Event, StartCause},
@@ -41,6 +48,11 @@ mod macos {
         NotifierReady(Result<MacNotifier, String>),
         RestoreExpectedTitle(u64),
         NetworkSpeed(NetworkSpeedLabels),
+        UpdateCheckCompleted(Result<UpdateStatus, UpdateError>),
+        UpdateDownloadCompleted {
+            version: String,
+            result: Result<std::path::PathBuf, UpdateError>,
+        },
     }
 
     #[derive(Clone)]
@@ -87,6 +99,7 @@ mod macos {
         /// Retained so Edit key equivalents stay registered for dialogs.
         app_edit_menu: Option<Menu>,
         speed_labels: NetworkSpeedLabels,
+        update_in_progress: bool,
         initialized: bool,
     }
 
@@ -112,6 +125,7 @@ mod macos {
                 feedback_restore: FeedbackRestoreGuard::default(),
                 app_edit_menu: None,
                 speed_labels: NetworkSpeedLabels::unknown(),
+                update_in_progress: false,
                 initialized: false,
             }
         }
@@ -195,6 +209,12 @@ mod macos {
                     self.speed_labels = labels;
                     self.apply_network_speed();
                 }
+                UserEvent::UpdateCheckCompleted(result) => {
+                    self.handle_update_check_completed(result);
+                }
+                UserEvent::UpdateDownloadCompleted { version, result } => {
+                    self.handle_update_download_completed(version, result);
+                }
             }
         }
 
@@ -209,6 +229,7 @@ mod macos {
                 UiCommand::SetShowNetworkSpeed(is_show_network_speed) => {
                     self.set_show_network_speed(is_show_network_speed);
                 }
+                UiCommand::CheckForUpdates => self.start_update_check(),
                 UiCommand::About => show_about(),
                 UiCommand::Quit => {
                     self.send_worker_command(WorkerCommand::Shutdown);
@@ -293,6 +314,108 @@ mod macos {
                 return;
             }
             self.apply_ui();
+        }
+
+        fn start_update_check(&mut self) {
+            if self.update_in_progress {
+                return;
+            }
+            self.set_update_in_progress(true);
+
+            let proxy = self.proxy.clone();
+            if let Err(error) = thread::Builder::new()
+                .name("ipchecker-update-check".to_owned())
+                .spawn(move || {
+                    if proxy
+                        .send_event(UserEvent::UpdateCheckCompleted(check_for_updates()))
+                        .is_err()
+                    {
+                        log::debug!("update check finished after the event loop closed");
+                    }
+                })
+            {
+                log::warn!("failed to start update check: {error}");
+                self.set_update_in_progress(false);
+                self.present_update_error();
+            }
+        }
+
+        fn handle_update_check_completed(&mut self, result: Result<UpdateStatus, UpdateError>) {
+            match result {
+                Ok(UpdateStatus::Current) => {
+                    self.set_update_in_progress(false);
+                    show_current_version(env!("CARGO_PKG_VERSION"));
+                }
+                Ok(UpdateStatus::Available(release)) => {
+                    if confirm_update_download(&release.version) {
+                        self.start_update_download(release);
+                    } else {
+                        self.set_update_in_progress(false);
+                    }
+                }
+                Err(error) => {
+                    log::warn!("update check failed: {error}");
+                    self.set_update_in_progress(false);
+                    self.present_update_error();
+                }
+            }
+        }
+
+        fn start_update_download(&mut self, release: UpdateRelease) {
+            let version = release.version.clone();
+            let proxy = self.proxy.clone();
+            if let Err(error) = thread::Builder::new()
+                .name("ipchecker-update-download".to_owned())
+                .spawn(move || {
+                    let result = download_and_extract(&release);
+                    if proxy
+                        .send_event(UserEvent::UpdateDownloadCompleted { version, result })
+                        .is_err()
+                    {
+                        log::debug!("update download finished after the event loop closed");
+                    }
+                })
+            {
+                log::warn!("failed to start update download: {error}");
+                self.set_update_in_progress(false);
+                self.present_update_error();
+            }
+        }
+
+        fn handle_update_download_completed(
+            &mut self,
+            version: String,
+            result: Result<std::path::PathBuf, UpdateError>,
+        ) {
+            self.set_update_in_progress(false);
+            match result {
+                Ok(app) => {
+                    show_update_ready(&version, &app);
+                    if let Err(error) = reveal_in_finder(&app) {
+                        log::warn!("failed to reveal downloaded update: {error}");
+                        self.present_update_error();
+                    }
+                }
+                Err(error) => {
+                    log::warn!("update download failed: {error}");
+                    self.present_update_error();
+                }
+            }
+        }
+
+        fn set_update_in_progress(&mut self, in_progress: bool) {
+            self.update_in_progress = in_progress;
+            if let Some(tray_ui) = &self.tray_ui {
+                tray_ui.set_check_for_updates_enabled(!in_progress);
+            }
+        }
+
+        fn present_update_error(&self) {
+            if show_update_error()
+                && let Err(error) = open_releases_page()
+            {
+                log::warn!("failed to open Releases page: {error}");
+            }
         }
 
         fn save_candidate(&mut self, candidate: Config) -> bool {

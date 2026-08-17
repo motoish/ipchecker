@@ -14,3 +14,5 @@ pub mod net_speed;
 pub mod notification;
 pub mod session;
 pub mod ui;
+pub mod update;
+pub mod update_dialog;

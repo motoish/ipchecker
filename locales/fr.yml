@@ -5,6 +5,7 @@ menu.minutes: "%{minutes} min"
 menu.check_now: Vérifier maintenant
 menu.show_network_speed: Afficher le débit
 menu.mute_session: Ne plus notifier cette session
+menu.check_for_updates: Rechercher les mises à jour…
 menu.about: À propos d’ipchecker…
 menu.quit: Quitter
 status.current_ip: "IP publique actuelle : %{ip}"
@@ -21,6 +22,19 @@ dialog.invalid_ipv4: Veuillez saisir une adresse IPv4 valide
 dialog.about_ok: OK
 dialog.about_version: "Version %{version}"
 dialog.about_body: "Une application de barre de menus macOS qui surveille votre IPv4 publique."
+dialog.update_current_title: Vous êtes à jour
+dialog.update_current_body: "ipchecker %{version} est la dernière version."
+dialog.update_available_title: Mise à jour disponible
+dialog.update_available_body: "Télécharger ipchecker %{version} maintenant ?"
+dialog.update_download: Télécharger
+dialog.update_cancel: Annuler
+dialog.update_ready_title: Mise à jour prête
+dialog.update_ready_body: "ipchecker %{version} a été enregistré dans %{path}. Quittez l’application actuelle, puis faites glisser la nouvelle dans Applications pour la remplacer."
+dialog.update_show_finder: Afficher dans le Finder
+dialog.update_error_title: Mise à jour impossible
+dialog.update_error_body: "Impossible de vérifier ou télécharger la mise à jour. Vous pouvez ouvrir la page GitHub Releases à la place."
+dialog.update_open_releases: Ouvrir Releases
+dialog.update_ok: OK
 notify.mismatch_title: L’IP publique ne correspond pas à l’attendue
 notify.mismatch_body: "Actuelle %{current}, attendue %{expected}"
 notify.fetch_failure_title: Impossible d’obtenir l’IP publique
