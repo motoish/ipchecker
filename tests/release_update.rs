@@ -158,7 +158,11 @@ fn release_metadata_repo() -> tempfile::TempDir {
     fs::create_dir(work.join("resources")).unwrap();
     fs::create_dir(work.join("scripts")).unwrap();
 
-    assert!(git(&remote, &["init", "--bare"]).status.success());
+    assert!(
+        git(&remote, &["init", "--bare", "-b", "main"])
+            .status
+            .success()
+    );
     assert!(git(&work, &["init", "-b", "main"]).status.success());
     fs::write(work.join("Cargo.toml"), "old cargo manifest\n").unwrap();
     fs::write(work.join("Cargo.lock"), "old cargo lock\n").unwrap();
@@ -493,17 +497,20 @@ fn release_metadata_commit_refuses_when_main_moved_with_different_files() {
     let original = git(&work, &["rev-parse", "HEAD"]);
     let expected_head = String::from_utf8_lossy(&original.stdout).trim().to_string();
 
+    let clone = git(
+        directory.path(),
+        &[
+            "clone",
+            "-b",
+            "main",
+            directory.path().join("remote.git").to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
     assert!(
-        git(
-            directory.path(),
-            &[
-                "clone",
-                directory.path().join("remote.git").to_str().unwrap(),
-                other.to_str().unwrap(),
-            ],
-        )
-        .status
-        .success()
+        clone.status.success(),
+        "clone failed: {}",
+        String::from_utf8_lossy(&clone.stderr)
     );
     fs::write(other.join("Cargo.toml"), "unrelated main update\n").unwrap();
     assert!(git(&other, &["add", "Cargo.toml"]).status.success());
@@ -524,7 +531,12 @@ fn release_metadata_commit_refuses_when_main_moved_with_different_files() {
         .status
         .success()
     );
-    assert!(git(&other, &["push", "origin", "main"]).status.success());
+    let push = git(&other, &["push", "origin", "main"]);
+    assert!(
+        push.status.success(),
+        "push failed: {}",
+        String::from_utf8_lossy(&push.stderr)
+    );
 
     let output = run_commit_release_metadata(&work, "2026.8.18-a1b2c3d4", &expected_head);
     assert!(!output.status.success());
@@ -631,14 +643,18 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let archive_check_index = step_index(&steps, "Verify app archive");
     let manifest_index = step_index(&steps, "Generate update manifest");
     let changelog_index = step_index(&steps, "Generate CHANGELOG.md");
-    let main_check_index = step_index(&steps, "Confirm main is unchanged");
     let calver_index = steps
         .iter()
         .position(|step| step["id"] == "calver")
         .unwrap();
     let upload_index = step_index(&steps, "Upload immutable release assets");
-    let cache_index = step_index(&steps, "Save Rust cache");
     let commit_index = step_index(&steps, "Commit release metadata");
+    assert!(steps.iter().all(|step| step["name"] != "Save Rust cache"));
+    assert!(
+        steps
+            .iter()
+            .all(|step| step["name"] != "Confirm main is unchanged")
+    );
     assert!(
         steps
             .iter()
@@ -650,11 +666,9 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
             && zip_index < archive_check_index
             && archive_check_index < manifest_index
             && manifest_index < changelog_index
-            && changelog_index < main_check_index
-            && main_check_index < calver_index
+            && changelog_index < commit_index
+            && commit_index < calver_index
             && calver_index < upload_index
-            && upload_index < cache_index
-            && cache_index < commit_index
     );
 
     assert_eq!(
@@ -669,11 +683,6 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
         changelog["with"]["args"],
         "--tag ${{ steps.identity.outputs.build_tag }}"
     );
-
-    let main_check_run = steps[main_check_index]["run"].as_str().unwrap();
-    assert!(main_check_run.contains("git fetch"));
-    assert!(main_check_run.contains("origin main"));
-    assert!(main_check_run.contains("$GITHUB_SHA"));
 
     let prepare = steps[prepare_index];
     let prepare_run = prepare["run"].as_str().unwrap();

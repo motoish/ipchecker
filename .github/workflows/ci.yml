@@ -113,15 +113,11 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Confirm main is unchanged
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin main
-          remote_head=$(git rev-parse refs/remotes/origin/main)
-          if [[ "$remote_head" != "$GITHUB_SHA" ]]; then
-            echo "main changed during release: expected $GITHUB_SHA, got $remote_head" >&2
-            exit 1
-          fi
+      - name: Commit release metadata
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: bash scripts/commit-release-metadata.sh "$VERSION" "$EXPECTED_HEAD"
 
       - name: Publish CalVer release records
         id: calver
@@ -142,14 +138,3 @@ jobs:
             ipchecker.zip \
             update.json \
             --clobber
-
-      - name: Save Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: macos
-
-      - name: Commit release metadata
-        env:
-          VERSION: ${{ steps.identity.outputs.version }}
-          EXPECTED_HEAD: ${{ github.sha }}
-        run: bash scripts/commit-release-metadata.sh "$VERSION" "$EXPECTED_HEAD"
