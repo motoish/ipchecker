@@ -71,11 +71,19 @@ Useful run modes:
 
 ## Releasing
 
-Push to `main` runs format, Clippy, and tests first. Only if those pass does it create a GitHub Release. One push is one release, using the last commit.
+Push to `main` runs format, Clippy, and tests first. Only if those pass does [`motoish/calver-release-action`](https://github.com/motoish/calver-release-action) publish the commit using the `Asia/Tokyo` calendar boundary.
 
-Each push creates an immutable pre-release `YYYY.M.D-<sha8>` (for example `2026.8.16-a1b2c3d4`) and moves that day's stable release `v2026.8.16` to the same commit. GitHub's latest release is the daily stable tag. Cargo versions cannot use `_`, so the unique tag uses `-`.
+The release channels are:
 
-The workflow updates `Cargo.toml`, `Cargo.lock`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases with a zipped `ipchecker.app`. The stable release also includes `update.json`, which points to the immutable build and records its numeric build, size, and SHA-256 checksum.
+- `vYYYY.M.D-<sha8>`: immutable build pre-release with `ipchecker.zip` and `update.json`
+- `vYYYY.M.D`: fast-forward-only daily pre-release channel
+- `vYYYY.M`: manually promoted monthly stable release and GitHub `latest`
+
+Release metadata is prepared only in the CI checkout and is not committed. `CFBundleVersion` uses the main-branch commit count. The update manifest records that numeric build, exact archive size, and SHA-256 checksum, and points to the immutable build asset.
+
+To publish a stable update, open **Actions → Promote stable release → Run workflow** and enter an immutable tag such as `v2026.8.17-a1b2c3d4`. Promotion copies the selected build's `ipchecker.zip` and `update.json` to `vYYYY.M`. If that monthly tag already points to another commit, promotion fails instead of replacing it.
+
+The in-app updater follows only the manually promoted monthly `latest` release. Daily and immutable pre-releases are not offered automatically.
 
 About shows the stable CalVer date (for example `2026.8.17`). Locales do not need edits.
 
