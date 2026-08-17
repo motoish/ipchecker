@@ -12,6 +12,7 @@
 - Expected-IP comparison and mismatch notifications
 - 1, 5, 15, 30, or 60-minute check intervals
 - Session-only mute without hiding the warning state
+- Built-in update check with verified download and Finder handoff
 
 ## Quick Start
 
@@ -35,6 +36,7 @@ Open the menu bar icon to:
 - change the check interval or check immediately
 - show or hide live upload/download rates
 - mute notifications for the current session
+- check for updates, download and verify the latest app, then reveal it in Finder for manual replacement
 
 Configuration is stored at:
 
@@ -73,7 +75,7 @@ Push to `main` runs format, Clippy, and tests first. Only if those pass does it 
 
 Each push creates an immutable pre-release `YYYY.M.D-<sha8>` (for example `2026.8.16-a1b2c3d4`) and moves that day's stable release `v2026.8.16` to the same commit. GitHub's latest release is the daily stable tag. Cargo versions cannot use `_`, so the unique tag uses `-`.
 
-The workflow updates `Cargo.toml`, `Cargo.lock`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases with a zipped `ipchecker.app`.
+The workflow updates `Cargo.toml`, `Cargo.lock`, `Info.plist`, and `CHANGELOG.md` in one commit, tags the unique pre-release and that day's stable tag, then creates the GitHub Releases with a zipped `ipchecker.app`. The stable release also includes `update.json`, which points to the immutable build and records its numeric build, size, and SHA-256 checksum.
 
 About shows the stable CalVer date (for example `2026.8.17`). Locales do not need edits.
 
@@ -88,4 +90,5 @@ git-cliff --config cliff.toml -o CHANGELOG.md
 - Public-IP sources are queried in order: `api.ipify.org`, `ifconfig.me/ip`, then `icanhazip.com`.
 - Notification permission may be requested on first use and can be changed in System Settings.
 - GitHub Releases include an ad-hoc signed `ipchecker.app` zip. macOS may require right-click → Open the first time.
+- In-app updates are downloaded and checksum-verified, but replacement remains manual because releases are not Developer ID signed or notarized.
 - Local builds also use ad-hoc signing.
