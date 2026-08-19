@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.20-600a8efa
+
+### Bug Fixes
+
+- Not reuse TPC connection by @motoish
+
 ## 2026.8.17-444bb109
 
 ### Bug Fixes

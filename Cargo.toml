@@ -1,6 +1,6 @@
 [package]
 name = "ipchecker"
-version = "2026.8.17-444bb109"
+version = "2026.8.20-600a8efa"
 edition = "2024"
 rust-version = "1.90"
 license = "BSD-3-Clause"
