@@ -95,6 +95,10 @@ impl ReqwestTextClient {
     pub fn new() -> Result<Self, reqwest::Error> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(8))
+            // Public-IP checks must not reuse TCP connections across polls.
+            // After a VPN connects, pooled keep-alive sockets can still egress on
+            // the pre-VPN route while browsers open fresh connections.
+            .pool_max_idle_per_host(0)
             .build()?;
         Ok(Self { client })
     }
@@ -104,6 +108,7 @@ impl HttpTextClient for ReqwestTextClient {
     fn get_text(&mut self, url: &str) -> Result<String, String> {
         self.client
             .get(url)
+            .header(reqwest::header::CONNECTION, "close")
             .send()
             .and_then(|response| response.error_for_status())
             .and_then(|response| response.text())
