@@ -79,12 +79,29 @@ fn is_usable_public_ipv4(ip: Ipv4Addr) -> bool {
         && !ip.is_unspecified()
         && !ip.is_multicast()
         && !ip.is_broadcast()
+        && !ip.is_documentation()
+        && !is_this_network(ip)
         && !is_shared_address(ip)
+        && !is_benchmarking(ip)
+        && !is_reserved(ip)
+}
+
+fn is_this_network(ip: Ipv4Addr) -> bool {
+    ip.octets()[0] == 0
 }
 
 fn is_shared_address(ip: Ipv4Addr) -> bool {
     let [first, second, _, _] = ip.octets();
     first == 100 && (64..=127).contains(&second)
+}
+
+fn is_benchmarking(ip: Ipv4Addr) -> bool {
+    let [first, second, _, _] = ip.octets();
+    first == 198 && (18..=19).contains(&second)
+}
+
+fn is_reserved(ip: Ipv4Addr) -> bool {
+    ip.octets()[0] >= 240
 }
 
 pub struct ReqwestTextClient {
