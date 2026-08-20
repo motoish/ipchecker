@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.8.21-67528bea
+
+### Bug Fixes
+
+- Net_speed by @motoish
+- Ip_source by @motoish
+
 ## 2026.8.20-600a8efa
 
 ### Bug Fixes
