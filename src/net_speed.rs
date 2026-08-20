@@ -91,6 +91,9 @@ impl NetworkSpeedSampler {
     }
 
     pub fn observe_failure(&mut self) -> &NetworkSpeedLabels {
+        self.previous = None;
+        self.recent_rates.clear();
+        self.labels = NetworkSpeedLabels::unknown();
         &self.labels
     }
 }

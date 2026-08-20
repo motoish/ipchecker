@@ -133,16 +133,44 @@ fn counter_wrap_reports_zero_rate_instead_of_a_spike() {
 }
 
 #[test]
-fn failed_read_keeps_the_last_rendered_frame() {
+fn failed_read_clears_to_unknown_instead_of_keeping_stale_rates() {
     let mut sampler = NetworkSpeedSampler::default();
     let start = Instant::now();
     sampler.observe(start, snapshot([("en0", 0, 0)]));
     sampler.observe(start + Duration::from_secs(1), snapshot([("en0", 1000, 0)]));
 
-    let kept = sampler.observe_failure().clone();
+    let cleared = sampler.observe_failure().clone();
 
-    assert_eq!(kept.download, rate("1", "KB/s"));
-    assert_eq!(kept.upload, rate("0", "KB/s"));
+    assert_eq!(cleared, NetworkSpeedLabels::unknown());
+}
+
+#[test]
+fn recovery_after_failure_starts_from_a_fresh_baseline() {
+    let mut sampler = NetworkSpeedSampler::default();
+    let start = Instant::now();
+    sampler.observe(start, snapshot([("en0", 0, 0)]));
+    sampler.observe(
+        start + Duration::from_secs(1),
+        snapshot([("en0", 1024 * 1024, 0)]),
+    );
+    sampler.observe_failure();
+
+    let after_recovery_first = sampler
+        .observe(
+            start + Duration::from_secs(2),
+            snapshot([("en0", 2 * 1024 * 1024, 0)]),
+        )
+        .clone();
+    let after_recovery_second = sampler
+        .observe(
+            start + Duration::from_secs(3),
+            snapshot([("en0", 2 * 1024 * 1024 + 1024, 0)]),
+        )
+        .clone();
+
+    assert_eq!(after_recovery_first, NetworkSpeedLabels::unknown());
+    assert_eq!(after_recovery_second.download, rate("1", "KB/s"));
+    assert_eq!(after_recovery_second.upload, rate("0", "KB/s"));
 }
 
 #[test]
