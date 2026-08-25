@@ -4,6 +4,7 @@ menu.interval: 確認間隔
 menu.minutes: "%{minutes} 分"
 menu.check_now: 今すぐ確認
 menu.show_network_speed: 通信速度を表示
+menu.show_network_latency: ネットワーク遅延を表示
 menu.mute_session: このセッションでは通知しない
 menu.check_for_updates: アップデートを確認…
 menu.about: ipcheckerについて…

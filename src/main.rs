@@ -192,6 +192,7 @@ mod macos {
                         action,
                         self.session.is_muted(),
                         self.config.is_show_network_speed,
+                        self.config.is_show_network_latency,
                     );
                     self.handle_command(command, control_flow);
                 }
@@ -229,6 +230,9 @@ mod macos {
                 UiCommand::SetMuted(muted) => self.set_muted(muted),
                 UiCommand::SetShowNetworkSpeed(is_show_network_speed) => {
                     self.set_show_network_speed(is_show_network_speed);
+                }
+                UiCommand::SetShowNetworkLatency(is_show_network_latency) => {
+                    self.set_show_network_latency(is_show_network_latency);
                 }
                 UiCommand::CheckForUpdates => self.start_update_check(),
                 UiCommand::About => show_about(),
@@ -310,6 +314,16 @@ mod macos {
         fn set_show_network_speed(&mut self, is_show_network_speed: bool) {
             let mut candidate = self.config.clone();
             candidate.is_show_network_speed = is_show_network_speed;
+            if !self.save_candidate(candidate) {
+                self.apply_ui();
+                return;
+            }
+            self.apply_ui();
+        }
+
+        fn set_show_network_latency(&mut self, is_show_network_latency: bool) {
+            let mut candidate = self.config.clone();
+            candidate.is_show_network_latency = is_show_network_latency;
             if !self.save_candidate(candidate) {
                 self.apply_ui();
                 return;
@@ -537,17 +551,25 @@ mod macos {
             if let Err(error) = tray_ui.apply(&self.ui_model()) {
                 log::warn!("failed to update tray UI: {error}");
             }
-            tray_ui.set_network_speed(&self.speed_labels, self.config.is_show_network_speed);
+            tray_ui.set_network_speed(
+                &self.speed_labels,
+                self.config.is_show_network_speed,
+                self.config.is_show_network_latency,
+            );
         }
 
         fn apply_network_speed(&self) {
-            if !self.config.is_show_network_speed {
+            if !self.config.is_show_network_speed && !self.config.is_show_network_latency {
                 return;
             }
             let Some(tray_ui) = &self.tray_ui else {
                 return;
             };
-            tray_ui.set_network_speed(&self.speed_labels, true);
+            tray_ui.set_network_speed(
+                &self.speed_labels,
+                self.config.is_show_network_speed,
+                self.config.is_show_network_latency,
+            );
         }
 
         fn start_network_speed_sampler(&self) {

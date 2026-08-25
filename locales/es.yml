@@ -4,6 +4,7 @@ menu.interval: Intervalo de comprobación
 menu.minutes: "%{minutes} min"
 menu.check_now: Comprobar ahora
 menu.show_network_speed: Mostrar velocidad de red
+menu.show_network_latency: Mostrar latencia de red
 menu.mute_session: No notificar en esta sesión
 menu.check_for_updates: Buscar actualizaciones…
 menu.about: Acerca de ipchecker…

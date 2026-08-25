@@ -4,6 +4,7 @@ menu.interval: Intervalle de vérification
 menu.minutes: "%{minutes} min"
 menu.check_now: Vérifier maintenant
 menu.show_network_speed: Afficher le débit
+menu.show_network_latency: Afficher la latence réseau
 menu.mute_session: Ne plus notifier cette session
 menu.check_for_updates: Rechercher les mises à jour…
 menu.about: À propos d’ipchecker…

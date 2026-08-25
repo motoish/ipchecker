@@ -31,6 +31,8 @@ struct RawConfig {
     interval_minutes: Option<u64>,
     #[serde(default, deserialize_with = "recover_bool")]
     show_network_speed: Option<bool>,
+    #[serde(default, deserialize_with = "recover_bool")]
+    show_network_latency: Option<bool>,
 }
 
 fn recover_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -61,6 +63,8 @@ pub struct Config {
     pub interval_minutes: u64,
     #[serde(rename = "show_network_speed")]
     pub is_show_network_speed: bool,
+    #[serde(rename = "show_network_latency")]
+    pub is_show_network_latency: bool,
 }
 
 impl Default for Config {
@@ -69,6 +73,7 @@ impl Default for Config {
             expected_ip: None,
             interval_minutes: 5,
             is_show_network_speed: true,
+            is_show_network_latency: true,
         }
     }
 }
@@ -88,6 +93,7 @@ impl Config {
                 .filter(|value| ALLOWED_INTERVAL_MINUTES.contains(value))
                 .unwrap_or(5),
             is_show_network_speed: raw.show_network_speed.unwrap_or(true),
+            is_show_network_latency: raw.show_network_latency.unwrap_or(true),
         }
     }
 
