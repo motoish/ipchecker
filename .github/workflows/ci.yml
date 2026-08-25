@@ -42,7 +42,7 @@ jobs:
   release:
     name: Release
     needs: check
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message || '', 'chore(release):') }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -103,15 +103,57 @@ jobs:
             "${{ github.repository }}" \
             update.json
 
-      - name: Generate release notes
+      - name: Generate CHANGELOG.md
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
           args: --tag ${{ steps.identity.outputs.build_tag }}
         env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Resolve release notes range
+        id: release_range
+        run: |
+          set -euo pipefail
+          previous_tag=$(git describe --tags \
+            --match 'v[0-9]*.[0-9]*.[0-9]*-????????' \
+            --abbrev=0 "$GITHUB_SHA^" 2>/dev/null || true)
+          if [[ -n "$previous_tag" ]]; then
+            range="$previous_tag..$GITHUB_SHA"
+          else
+            range="$GITHUB_SHA"
+          fi
+          echo "range=$range" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag ${{ steps.identity.outputs.build_tag }} ${{ steps.release_range.outputs.range }}
+        env:
           OUTPUT: release-notes.md
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Verify release notes scope
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -s release-notes.md
+          section_count=$(grep -c '^## ' release-notes.md || true)
+          if [[ "$section_count" != "1" ]] || ! grep -Fqx "## $VERSION" release-notes.md; then
+            echo "release notes must contain exactly the current version section" >&2
+            exit 1
+          fi
+
+      - name: Commit release metadata
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: bash scripts/commit-release-metadata.sh "$VERSION" "$EXPECTED_HEAD"
 
       - name: Publish CalVer release records
         id: calver

@@ -613,6 +613,12 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let workflow = load_workflow(".github/workflows/ci.yml");
     let steps = workflow_steps(&workflow, "release");
 
+    let release_condition = workflow["jobs"]["release"]["if"].as_str().unwrap();
+    assert!(release_condition.contains("github.event_name == 'push'"));
+    assert!(release_condition.contains("github.ref == 'refs/heads/main'"));
+    assert!(release_condition.contains("!startsWith(github.event.head_commit.message"));
+    assert!(release_condition.contains("'chore(release):'"));
+
     assert!(steps.iter().all(|step| {
         !step["uses"]
             .as_str()
@@ -642,18 +648,17 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let zip_index = step_index(&steps, "Zip app");
     let archive_check_index = step_index(&steps, "Verify app archive");
     let manifest_index = step_index(&steps, "Generate update manifest");
+    let changelog_index = step_index(&steps, "Generate CHANGELOG.md");
+    let release_range_index = step_index(&steps, "Resolve release notes range");
     let release_notes_index = step_index(&steps, "Generate release notes");
+    let release_notes_check_index = step_index(&steps, "Verify release notes scope");
+    let commit_index = step_index(&steps, "Commit release metadata");
     let calver_index = steps
         .iter()
         .position(|step| step["id"] == "calver")
         .unwrap();
     let update_notes_index = step_index(&steps, "Update immutable release notes");
     let upload_index = step_index(&steps, "Upload immutable release assets");
-    assert!(
-        steps
-            .iter()
-            .all(|step| step["name"] != "Commit release metadata")
-    );
     assert!(steps.iter().all(|step| step["name"] != "Save Rust cache"));
     assert!(
         steps
@@ -670,8 +675,12 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
             && bundle_index < zip_index
             && zip_index < archive_check_index
             && archive_check_index < manifest_index
-            && manifest_index < release_notes_index
-            && release_notes_index < calver_index
+            && manifest_index < changelog_index
+            && changelog_index < release_range_index
+            && release_range_index < release_notes_index
+            && release_notes_index < release_notes_check_index
+            && release_notes_check_index < commit_index
+            && commit_index < calver_index
             && calver_index < update_notes_index
             && update_notes_index < upload_index
     );
@@ -681,12 +690,50 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
         "bash scripts/verify-app-archive.sh ipchecker.zip"
     );
 
+    let changelog = steps[changelog_index];
+    assert_eq!(changelog["uses"], "orhun/git-cliff-action@v4");
+    assert_eq!(changelog["env"]["OUTPUT"], "CHANGELOG.md");
+    assert_eq!(
+        changelog["with"]["args"],
+        "--tag ${{ steps.identity.outputs.build_tag }}"
+    );
+
+    let release_range = steps[release_range_index];
+    assert_eq!(release_range["id"], "release_range");
+    let release_range_run = release_range["run"].as_str().unwrap();
+    assert!(release_range_run.contains("git describe --tags"));
+    assert!(release_range_run.contains("$GITHUB_SHA^"));
+    assert!(release_range_run.contains("range=\"$previous_tag..$GITHUB_SHA\""));
+    assert!(release_range_run.contains("range=\"$GITHUB_SHA\""));
+    assert!(release_range_run.contains("$GITHUB_OUTPUT"));
+
     let release_notes = steps[release_notes_index];
     assert_eq!(release_notes["uses"], "orhun/git-cliff-action@v4");
     assert_eq!(release_notes["env"]["OUTPUT"], "release-notes.md");
     assert_eq!(
         release_notes["with"]["args"],
-        "--tag ${{ steps.identity.outputs.build_tag }}"
+        "--tag ${{ steps.identity.outputs.build_tag }} ${{ steps.release_range.outputs.range }}"
+    );
+
+    let release_notes_check = steps[release_notes_check_index];
+    assert_eq!(
+        release_notes_check["env"]["VERSION"],
+        "${{ steps.identity.outputs.version }}"
+    );
+    let release_notes_check_run = release_notes_check["run"].as_str().unwrap();
+    assert!(release_notes_check_run.contains("test -s release-notes.md"));
+    assert!(release_notes_check_run.contains("grep -c '^## ' release-notes.md"));
+    assert!(release_notes_check_run.contains("grep -Fqx \"## $VERSION\" release-notes.md"));
+
+    let commit = steps[commit_index];
+    assert_eq!(
+        commit["env"]["VERSION"],
+        "${{ steps.identity.outputs.version }}"
+    );
+    assert_eq!(commit["env"]["EXPECTED_HEAD"], "${{ github.sha }}");
+    assert_eq!(
+        commit["run"],
+        "bash scripts/commit-release-metadata.sh \"$VERSION\" \"$EXPECTED_HEAD\""
     );
 
     let update_notes = steps[update_notes_index];
