@@ -642,13 +642,18 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let zip_index = step_index(&steps, "Zip app");
     let archive_check_index = step_index(&steps, "Verify app archive");
     let manifest_index = step_index(&steps, "Generate update manifest");
-    let changelog_index = step_index(&steps, "Generate CHANGELOG.md");
+    let release_notes_index = step_index(&steps, "Generate release notes");
     let calver_index = steps
         .iter()
         .position(|step| step["id"] == "calver")
         .unwrap();
+    let update_notes_index = step_index(&steps, "Update immutable release notes");
     let upload_index = step_index(&steps, "Upload immutable release assets");
-    let commit_index = step_index(&steps, "Commit release metadata");
+    assert!(
+        steps
+            .iter()
+            .all(|step| step["name"] != "Commit release metadata")
+    );
     assert!(steps.iter().all(|step| step["name"] != "Save Rust cache"));
     assert!(
         steps
@@ -665,10 +670,10 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
             && bundle_index < zip_index
             && zip_index < archive_check_index
             && archive_check_index < manifest_index
-            && manifest_index < changelog_index
-            && changelog_index < commit_index
-            && commit_index < calver_index
-            && calver_index < upload_index
+            && manifest_index < release_notes_index
+            && release_notes_index < calver_index
+            && calver_index < update_notes_index
+            && update_notes_index < upload_index
     );
 
     assert_eq!(
@@ -676,13 +681,23 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
         "bash scripts/verify-app-archive.sh ipchecker.zip"
     );
 
-    let changelog = steps[changelog_index];
-    assert_eq!(changelog["uses"], "orhun/git-cliff-action@v4");
-    assert_eq!(changelog["env"]["OUTPUT"], "CHANGELOG.md");
+    let release_notes = steps[release_notes_index];
+    assert_eq!(release_notes["uses"], "orhun/git-cliff-action@v4");
+    assert_eq!(release_notes["env"]["OUTPUT"], "release-notes.md");
     assert_eq!(
-        changelog["with"]["args"],
+        release_notes["with"]["args"],
         "--tag ${{ steps.identity.outputs.build_tag }}"
     );
+
+    let update_notes = steps[update_notes_index];
+    assert_eq!(
+        update_notes["env"]["BUILD_TAG"],
+        "${{ steps.calver.outputs.build_tag }}"
+    );
+    let update_notes_run = update_notes["run"].as_str().unwrap();
+    assert!(update_notes_run.contains("gh release edit"));
+    assert!(update_notes_run.contains("--repo \"$GITHUB_REPOSITORY\""));
+    assert!(update_notes_run.contains("--notes-file release-notes.md"));
 
     let prepare = steps[prepare_index];
     let prepare_run = prepare["run"].as_str().unwrap();
@@ -712,17 +727,6 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     let upload_run = upload["run"].as_str().unwrap();
     assert!(upload_run.contains("ipchecker.zip"));
     assert!(upload_run.contains("update.json"));
-
-    let commit = steps[commit_index];
-    assert_eq!(
-        commit["env"]["VERSION"],
-        "${{ steps.identity.outputs.version }}"
-    );
-    assert_eq!(commit["env"]["EXPECTED_HEAD"], "${{ github.sha }}");
-    assert_eq!(
-        commit["run"],
-        "bash scripts/commit-release-metadata.sh \"$VERSION\" \"$EXPECTED_HEAD\""
-    );
 }
 
 #[test]
@@ -748,10 +752,18 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
         .iter()
         .position(|step| step["name"] == "Verify immutable assets")
         .expect("immutable asset verification step");
+    let notes_download_index = steps
+        .iter()
+        .position(|step| step["name"] == "Download immutable release notes")
+        .expect("immutable Release Notes download step");
     let upload_index = steps
         .iter()
         .position(|step| step["name"] == "Upload stable assets")
         .expect("stable asset upload step");
+    let notes_update_index = steps
+        .iter()
+        .position(|step| step["name"] == "Update stable release notes")
+        .expect("stable Release Notes update step");
     let verify_index = steps
         .iter()
         .position(|step| step["name"] == "Verify stable assets")
@@ -759,8 +771,11 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     assert!(
         checkout_index < download_index
             && download_index < preflight_index
-            && preflight_index < calver_index
+            && preflight_index < notes_download_index
+            && notes_download_index < calver_index
             && calver_index < upload_index
+            && calver_index < notes_update_index
+            && notes_update_index < upload_index
             && upload_index < verify_index
     );
 
@@ -775,11 +790,28 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     assert!(preflight_run.contains("scripts/verify-app-archive.sh"));
     assert!(preflight_run.contains("jq -e"));
 
+    let notes_download = steps[notes_download_index];
+    let notes_download_run = notes_download["run"].as_str().unwrap();
+    assert!(notes_download_run.contains("gh release view"));
+    assert!(notes_download_run.contains("--repo \"$GITHUB_REPOSITORY\""));
+    assert!(notes_download_run.contains("--json body"));
+    assert!(notes_download_run.contains("promoted/release-notes.md"));
+
     let calver = steps[calver_index];
     assert_eq!(calver["uses"], "motoish/calver-release-action@v1");
     assert_eq!(calver["with"]["mode"], "promote");
     assert_eq!(calver["with"]["source_tag"], "${{ inputs.source_tag }}");
     assert_eq!(calver["with"]["token"], "${{ github.token }}");
+
+    let notes_update = steps[notes_update_index];
+    assert_eq!(
+        notes_update["env"]["STABLE_TAG"],
+        "${{ steps.calver.outputs.channel_tag }}"
+    );
+    let notes_update_run = notes_update["run"].as_str().unwrap();
+    assert!(notes_update_run.contains("gh release edit"));
+    assert!(notes_update_run.contains("--repo \"$GITHUB_REPOSITORY\""));
+    assert!(notes_update_run.contains("--notes-file promoted/release-notes.md"));
 
     assert_eq!(
         steps[upload_index]["env"]["STABLE_TAG"],

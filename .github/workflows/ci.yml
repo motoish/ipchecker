@@ -42,7 +42,7 @@ jobs:
   release:
     name: Release
     needs: check
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message || '', 'chore(release):') }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -103,21 +103,15 @@ jobs:
             "${{ github.repository }}" \
             update.json
 
-      - name: Generate CHANGELOG.md
+      - name: Generate release notes
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
           args: --tag ${{ steps.identity.outputs.build_tag }}
         env:
-          OUTPUT: CHANGELOG.md
+          OUTPUT: release-notes.md
           GITHUB_REPO: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Commit release metadata
-        env:
-          VERSION: ${{ steps.identity.outputs.version }}
-          EXPECTED_HEAD: ${{ github.sha }}
-        run: bash scripts/commit-release-metadata.sh "$VERSION" "$EXPECTED_HEAD"
 
       - name: Publish CalVer release records
         id: calver
@@ -128,6 +122,15 @@ jobs:
           now: ${{ steps.identity.outputs.epoch }}
           expected_version: ${{ steps.identity.outputs.version }}
           token: ${{ github.token }}
+
+      - name: Update immutable release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_TAG: ${{ steps.calver.outputs.build_tag }}
+        run: |
+          gh release edit "$BUILD_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --notes-file release-notes.md
 
       - name: Upload immutable release assets
         env:

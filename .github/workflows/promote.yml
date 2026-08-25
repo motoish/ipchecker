@@ -55,6 +55,16 @@ jobs:
             exit 1
           fi
 
+      - name: Download immutable release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
+        run: |
+          gh release view "$SOURCE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json body \
+            --jq .body > promoted/release-notes.md
+
       - name: Promote monthly stable release
         id: calver
         uses: motoish/calver-release-action@v1
@@ -62,6 +72,15 @@ jobs:
           mode: promote
           source_tag: ${{ inputs.source_tag }}
           token: ${{ github.token }}
+
+      - name: Update stable release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_TAG: ${{ steps.calver.outputs.channel_tag }}
+        run: |
+          gh release edit "$STABLE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --notes-file promoted/release-notes.md
 
       - name: Upload stable assets
         env:
