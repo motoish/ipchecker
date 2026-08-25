@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.25-14dae25c
+
+### Features
+
+- Erase | by @motoish
+
 ## 2026.8.25-a39764ac
 
 ### Documentation
