@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.25-98806986
+
+### Bug Fixes
+
+- Modify frame width by @motoish
+
 ## 2026.8.25-01941237
 
 ### Documentation
