@@ -101,6 +101,10 @@ pub fn format_unknown_latency() -> String {
 
 pub fn measure_tcp_latency() -> Option<u64> {
     let address: SocketAddr = format!("{LATENCY_HOST}:{LATENCY_PORT}").parse().ok()?;
+    measure_tcp_latency_to(address)
+}
+
+pub fn measure_tcp_latency_to(address: SocketAddr) -> Option<u64> {
     let started = Instant::now();
     TcpStream::connect_timeout(&address, LATENCY_TIMEOUT).ok()?;
     Some(started.elapsed().as_millis() as u64)

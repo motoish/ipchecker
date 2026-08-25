@@ -11,6 +11,7 @@ pub mod ip_input;
 pub mod ip_source;
 pub mod monitor;
 pub mod net_latency;
+pub mod net_metrics;
 pub mod net_speed;
 pub mod notification;
 pub mod session;

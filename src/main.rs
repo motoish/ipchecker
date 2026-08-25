@@ -1,10 +1,6 @@
 #[cfg(target_os = "macos")]
 mod macos {
-    use std::{
-        net::Ipv4Addr,
-        thread,
-        time::{Duration, Instant},
-    };
+    use std::{net::Ipv4Addr, thread, time::Duration};
 
     use arboard::Clipboard;
     use ipchecker::{
@@ -18,10 +14,8 @@ mod macos {
         ip_input::prompt_expected_ip,
         ip_source::ReqwestIpSource,
         monitor::{Monitor, MonitorOutcome, MonitorState},
-        net_latency::{NetworkLatencySampler, measure_tcp_latency},
-        net_speed::{
-            NetworkSpeedLabels, NetworkSpeedSampler, SAMPLE_INTERVAL, read_interface_snapshot,
-        },
+        net_metrics::{NetworkMetricsHandle, NetworkMetricsSampling, NetworkMetricsSink},
+        net_speed::NetworkSpeedLabels,
         notification::{ActionSink, MacNotifier, NotificationAction, Notifier},
         session::Session,
         ui::{FeedbackRestoreGuard, TrayUi, UiCommand, UiModel, install_app_edit_menu},
@@ -85,6 +79,19 @@ mod macos {
         }
     }
 
+    #[derive(Clone)]
+    struct NetworkMetricsEventProxy {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    impl NetworkMetricsSink for NetworkMetricsEventProxy {
+        fn send_labels(&self, labels: NetworkSpeedLabels) -> Result<(), EventSinkClosed> {
+            self.proxy
+                .send_event(UserEvent::NetworkSpeed(labels))
+                .map_err(|_| EventSinkClosed)
+        }
+    }
+
     struct Runtime {
         proxy: EventLoopProxy<UserEvent>,
         store: Option<ConfigStore>,
@@ -96,6 +103,7 @@ mod macos {
         notifier: Option<MacNotifier>,
         notification_coordinator: NotificationCoordinator,
         worker: Option<WorkerHandle>,
+        network_metrics: Option<NetworkMetricsHandle>,
         feedback_restore: FeedbackRestoreGuard,
         /// Retained so Edit key equivalents stay registered for dialogs.
         app_edit_menu: Option<Menu>,
@@ -123,6 +131,7 @@ mod macos {
                 notifier: None,
                 notification_coordinator: NotificationCoordinator::default(),
                 worker: None,
+                network_metrics: None,
                 feedback_restore: FeedbackRestoreGuard::default(),
                 app_edit_menu: None,
                 speed_labels: NetworkSpeedLabels::unknown(),
@@ -149,7 +158,7 @@ mod macos {
                 Ok(tray_ui) => self.tray_ui = Some(tray_ui),
                 Err(error) => log::error!("failed to create tray UI: {error}"),
             }
-            self.start_network_speed_sampler();
+            self.start_network_metrics_sampler();
 
             match ReqwestIpSource::new() {
                 Ok(source) => {
@@ -318,6 +327,7 @@ mod macos {
                 self.apply_ui();
                 return;
             }
+            self.sync_network_metrics_sampling();
             self.apply_ui();
         }
 
@@ -328,6 +338,7 @@ mod macos {
                 self.apply_ui();
                 return;
             }
+            self.sync_network_metrics_sampling();
             self.apply_ui();
         }
 
@@ -572,35 +583,26 @@ mod macos {
             );
         }
 
-        fn start_network_speed_sampler(&self) {
-            let proxy = self.proxy.clone();
-            let spawn = thread::Builder::new()
-                .name("ipchecker-net-speed".to_owned())
-                .spawn(move || {
-                    let mut sampler = NetworkSpeedSampler::default();
-                    let mut latency_sampler = NetworkLatencySampler::default();
-                    loop {
-                        let latency = latency_sampler.observe(measure_tcp_latency()).clone();
-                        let labels = match read_interface_snapshot() {
-                            Ok(counters) => sampler
-                                .observe(Instant::now(), counters)
-                                .clone()
-                                .with_latency(latency),
-                            Err(error) => {
-                                log::warn!("failed to read interface counters: {error}");
-                                sampler.observe_failure().clone().with_latency(latency)
-                            }
-                        };
-                        if proxy.send_event(UserEvent::NetworkSpeed(labels)).is_err() {
-                            log::debug!("network speed sample arrived after the event loop closed");
-                            break;
-                        }
-                        thread::sleep(SAMPLE_INTERVAL);
-                    }
-                });
-            if let Err(error) = spawn {
-                log::warn!("failed to start network speed sampler: {error}");
-            }
+        fn sync_network_metrics_sampling(&self) {
+            let Some(network_metrics) = &self.network_metrics else {
+                return;
+            };
+            network_metrics.set_sampling(NetworkMetricsSampling {
+                is_show_network_speed: self.config.is_show_network_speed,
+                is_show_network_latency: self.config.is_show_network_latency,
+            });
+        }
+
+        fn start_network_metrics_sampler(&mut self) {
+            self.network_metrics = Some(NetworkMetricsHandle::start(
+                NetworkMetricsEventProxy {
+                    proxy: self.proxy.clone(),
+                },
+                NetworkMetricsSampling {
+                    is_show_network_speed: self.config.is_show_network_speed,
+                    is_show_network_latency: self.config.is_show_network_latency,
+                },
+            ));
         }
     }
 

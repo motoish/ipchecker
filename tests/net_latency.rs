@@ -1,6 +1,12 @@
+use std::{
+    net::TcpListener,
+    thread,
+    time::{Duration, Instant},
+};
+
 use ipchecker::net_latency::{
     LatencyDisplay, LatencyLevel, NetworkLatencySampler, format_latency, format_unknown_latency,
-    measure_tcp_latency,
+    measure_tcp_latency, measure_tcp_latency_to,
 };
 
 #[test]
@@ -100,6 +106,34 @@ fn latency_failure_clears_to_unknown() {
 }
 
 #[test]
+fn tcp_latency_probe_measures_a_local_listener() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind local listener");
+    let address = listener.local_addr().expect("local address");
+    thread::spawn(move || {
+        let _ = listener.accept();
+    });
+
+    let started = Instant::now();
+    let latency = measure_tcp_latency_to(address);
+    assert!(
+        latency.is_some(),
+        "expected a TCP latency sample to a local listener"
+    );
+    assert!(latency.unwrap() <= 1_000);
+    assert!(started.elapsed() < Duration::from_secs(1));
+}
+
+#[test]
+fn tcp_latency_probe_reports_none_when_connection_is_refused() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind local listener");
+    let address = listener.local_addr().expect("local address");
+    drop(listener);
+
+    assert_eq!(measure_tcp_latency_to(address), None);
+}
+
+#[test]
+#[ignore = "requires public network access to 1.1.1.1:443"]
 fn tcp_latency_probe_reaches_a_public_host() {
     let latency = measure_tcp_latency();
     assert!(
