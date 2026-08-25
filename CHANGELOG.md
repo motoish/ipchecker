@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.26-6bbad949
+
+### Bug Fixes
+
+- Decouple latency probing from network speed sampling by @motoish
+
 ## 2026.8.25-98806986
 
 ### Bug Fixes
