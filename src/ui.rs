@@ -23,9 +23,9 @@ use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_cl
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
     NSAttributedStringNSStringDrawing, NSBezierPath, NSCellImagePosition, NSColor,
-    NSCompositingOperation, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage,
-    NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab,
-    NSTextTabOptionKey, NSView,
+    NSCompositingOperation, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
+    NSGraphicsContext, NSImage, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSRectFill,
+    NSTextAlignment, NSTextTab, NSTextTabOptionKey, NSView,
 };
 #[cfg(target_os = "macos")]
 use objc2_foundation::{
@@ -617,7 +617,7 @@ impl TrayUi {
 #[cfg(target_os = "macos")]
 const TRAY_ICON_POINTS: f64 = 18.0;
 #[cfg(target_os = "macos")]
-const TRAY_ICON_TEXT_GAP: f64 = 3.0;
+const TRAY_ICON_TEXT_GAP: f64 = 2.0;
 /// NSStatusBarButton keeps a trailing inset after we draw from x = 0.
 #[cfg(target_os = "macos")]
 const TRAY_TRAILING_TRIM: f64 = 6.0;
@@ -638,6 +638,8 @@ struct SpeedTitleIvars {
     is_show_network_latency: RefCell<bool>,
     is_show_network_speed: RefCell<bool>,
     icon: RefCell<Option<Retained<NSImage>>>,
+    last_latency_text: RefCell<String>,
+    last_speed_text: RefCell<String>,
 }
 
 #[cfg(target_os = "macos")]
@@ -668,6 +670,8 @@ define_class!(
             let is_show_network_speed = *ivars.is_show_network_speed.borrow();
             let latency_size = latency.size();
             let mut x = 0.0;
+            let mut latency_dot_rect = None;
+            let mut latency_text_point = None;
             if is_show_network_latency && latency_column_width > 0.0 && latency_size.width > 0.0 {
                 let stack_height = SPEED_LINE_HEIGHT * 2.0;
                 let stack_y = ((bounds.size.height - stack_height) / 2.0).round().max(0.0);
@@ -677,30 +681,22 @@ define_class!(
                 let circle_y = stack_y
                     + SPEED_LINE_HEIGHT
                     + (SPEED_LINE_HEIGHT - LATENCY_DOT_DIAMETER) / 2.0;
-                draw_latency_dot(
+                latency_dot_rect = Some(pixel_aligned_rect(
                     NSRect::new(
                         NSPoint::new(circle_x, circle_y),
                         NSSize::new(LATENCY_DOT_DIAMETER, LATENCY_DOT_DIAMETER),
                     ),
-                    latency_level,
-                );
+                    self.backing_scale_factor(),
+                ));
                 let text_y =
                     stack_y + ((SPEED_LINE_HEIGHT - latency_size.height) / 2.0).round();
-                latency.drawAtPoint(NSPoint::new(text_x, text_y));
+                latency_text_point = Some(NSPoint::new(text_x, text_y));
                 x = latency_column_width + TRAY_ICON_TEXT_GAP;
             }
 
             if let Some(image) = icon.as_ref() {
                 let icon_rect = NSRect::new(NSPoint::new(x, icon_y), icon_size);
-                // Template icons don't auto-tint in custom NSViews; mask labelColor with image alpha.
-                NSColor::labelColor().set();
-                NSRectFill(icon_rect);
-                image.drawInRect_fromRect_operation_fraction(
-                    icon_rect,
-                    NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)),
-                    NSCompositingOperation::DestinationIn,
-                    1.0,
-                );
+                draw_tray_template_icon(image, icon_rect);
             }
             x += icon_size.width + TRAY_ICON_TEXT_GAP;
 
@@ -709,11 +705,24 @@ define_class!(
                 let speed_y = (icon_y + (icon_size.height - speed_size.height) / 2.0).round();
                 speed.drawAtPoint(NSPoint::new(x, speed_y));
             }
+
+            if let Some(text_point) = latency_text_point {
+                latency.drawAtPoint(text_point);
+            }
+            if let Some(dot_rect) = latency_dot_rect {
+                draw_latency_dot(dot_rect, latency_level);
+            }
+        }
+
+        #[unsafe(method(isFlipped))]
+        fn is_flipped(&self) -> bool {
+            false
         }
 
         #[unsafe(method(allowsVibrancy))]
         fn allows_vibrancy(&self) -> bool {
-            true
+            // Saturated latency dots flicker when composited through vibrancy on light menu bars.
+            false
         }
 
         #[unsafe(method_id(hitTest:))]
@@ -734,6 +743,8 @@ impl SpeedTitleView {
             is_show_network_latency: RefCell::new(true),
             is_show_network_speed: RefCell::new(true),
             icon: RefCell::new(None),
+            last_latency_text: RefCell::new(String::new()),
+            last_speed_text: RefCell::new(String::new()),
         });
         unsafe { msg_send![super(view), init] }
     }
@@ -747,12 +758,27 @@ impl SpeedTitleView {
         is_show_network_latency: bool,
         is_show_network_speed: bool,
     ) {
-        *self.ivars().speed.borrow_mut() = speed;
-        *self.ivars().latency.borrow_mut() = latency;
-        *self.ivars().latency_level.borrow_mut() = latency_level;
-        *self.ivars().latency_column_width.borrow_mut() = latency_column_width;
-        *self.ivars().is_show_network_latency.borrow_mut() = is_show_network_latency;
-        *self.ivars().is_show_network_speed.borrow_mut() = is_show_network_speed;
+        let latency_text = latency.string().to_string();
+        let speed_text = speed.string().to_string();
+        let ivars = self.ivars();
+        if *ivars.is_show_network_latency.borrow() == is_show_network_latency
+            && *ivars.is_show_network_speed.borrow() == is_show_network_speed
+            && *ivars.latency_level.borrow() == latency_level
+            && (*ivars.latency_column_width.borrow() - latency_column_width).abs() < f64::EPSILON
+            && *ivars.last_latency_text.borrow() == latency_text
+            && *ivars.last_speed_text.borrow() == speed_text
+        {
+            return;
+        }
+
+        *ivars.speed.borrow_mut() = speed;
+        *ivars.latency.borrow_mut() = latency;
+        *ivars.latency_level.borrow_mut() = latency_level;
+        *ivars.latency_column_width.borrow_mut() = latency_column_width;
+        *ivars.is_show_network_latency.borrow_mut() = is_show_network_latency;
+        *ivars.is_show_network_speed.borrow_mut() = is_show_network_speed;
+        *ivars.last_latency_text.borrow_mut() = latency_text;
+        *ivars.last_speed_text.borrow_mut() = speed_text;
         self.setNeedsDisplay(true);
     }
 
@@ -768,6 +794,12 @@ impl SpeedTitleView {
             .as_ref()
             .map(|image| image.size())
             .unwrap_or(NSSize::new(TRAY_ICON_POINTS, TRAY_ICON_POINTS))
+    }
+
+    fn backing_scale_factor(&self) -> f64 {
+        self.window()
+            .map(|window| window.backingScaleFactor())
+            .unwrap_or(2.0)
     }
 }
 
@@ -864,13 +896,65 @@ fn set_tray_speed_title(
 }
 
 #[cfg(target_os = "macos")]
+fn draw_tray_template_icon(image: &NSImage, icon_rect: NSRect) {
+    let clip_rect = icon_disc_rect(icon_rect);
+    if let Some(context) = NSGraphicsContext::currentContext() {
+        context.saveGraphicsState();
+    }
+    NSBezierPath::bezierPathWithOvalInRect(clip_rect).addClip();
+    // Template icons don't auto-tint in custom NSViews; mask labelColor with image alpha.
+    NSColor::labelColor().set();
+    NSRectFill(icon_rect);
+    image.drawInRect_fromRect_operation_fraction(
+        icon_rect,
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)),
+        NSCompositingOperation::DestinationIn,
+        1.0,
+    );
+    if let Some(context) = NSGraphicsContext::currentContext() {
+        context.restoreGraphicsState();
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn icon_disc_rect(icon_rect: NSRect) -> NSRect {
+    // Match the carved 36pt disc scaled into the 18pt tray icon rect.
+    const DISC_INSET: f64 = 0.9;
+    NSRect::new(
+        NSPoint::new(
+            icon_rect.origin.x + DISC_INSET,
+            icon_rect.origin.y + DISC_INSET,
+        ),
+        NSSize::new(
+            (icon_rect.size.width - DISC_INSET * 2.0).max(0.0),
+            (icon_rect.size.height - DISC_INSET * 2.0).max(0.0),
+        ),
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn pixel_aligned_rect(rect: NSRect, scale: f64) -> NSRect {
+    if scale <= 0.0 {
+        return rect;
+    }
+    let align = |value: f64| (value * scale).round() / scale;
+    NSRect::new(
+        NSPoint::new(align(rect.origin.x), align(rect.origin.y)),
+        NSSize::new(
+            align(rect.size.width).max(1.0 / scale),
+            align(rect.size.height).max(1.0 / scale),
+        ),
+    )
+}
+
+#[cfg(target_os = "macos")]
 fn draw_latency_dot(rect: NSRect, level: LatencyLevel) {
     let color = match level {
         LatencyLevel::Low => NSColor::systemGreenColor(),
         LatencyLevel::Medium => NSColor::systemYellowColor(),
         LatencyLevel::High => NSColor::systemRedColor(),
     };
-    color.set();
+    color.setFill();
     NSBezierPath::bezierPathWithOvalInRect(rect).fill();
 }
 
