@@ -44,7 +44,7 @@ Configuration is stored at:
 ~/Library/Application Support/ipchecker/config.toml
 ```
 
-The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon` (all default `true`). At least one of the three must remain enabled so the menu bar entry stays accessible.
+The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon` (all default `true`). At least one of the three must remain enabled so the menu bar entry stays accessible. Mismatch notifications are sent on each check interval only while the status icon is shown; fetch-failure notifications still fire once per failure episode.
 
 ## Development
 
