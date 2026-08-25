@@ -44,7 +44,7 @@ Configuration is stored at:
 ~/Library/Application Support/ipchecker/config.toml
 ```
 
-The network-speed menu toggle is saved there as `show_network_speed` (default `true`).
+The network-speed and network-latency menu toggles are saved there as `show_network_speed` and `show_network_latency` (both default `true`).
 
 ## Development
 
