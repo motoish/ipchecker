@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.8.25-01941237
+
+### Documentation
+
+- Update README.md by @motoish
+
+### Miscellaneous Tasks
+
+- Aggregate changelog for stable releases by @motoish
+
 ## 2026.8.25-de5f0599
 
 ### Miscellaneous Tasks
