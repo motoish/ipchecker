@@ -18,6 +18,7 @@ mod macos {
         ip_input::prompt_expected_ip,
         ip_source::ReqwestIpSource,
         monitor::{Monitor, MonitorOutcome, MonitorState},
+        net_latency::{NetworkLatencySampler, measure_tcp_latency},
         net_speed::{
             NetworkSpeedLabels, NetworkSpeedSampler, SAMPLE_INTERVAL, read_interface_snapshot,
         },
@@ -555,12 +556,17 @@ mod macos {
                 .name("ipchecker-net-speed".to_owned())
                 .spawn(move || {
                     let mut sampler = NetworkSpeedSampler::default();
+                    let mut latency_sampler = NetworkLatencySampler::default();
                     loop {
+                        let latency = latency_sampler.observe(measure_tcp_latency()).clone();
                         let labels = match read_interface_snapshot() {
-                            Ok(counters) => sampler.observe(Instant::now(), counters).clone(),
+                            Ok(counters) => sampler
+                                .observe(Instant::now(), counters)
+                                .clone()
+                                .with_latency(latency),
                             Err(error) => {
                                 log::warn!("failed to read interface counters: {error}");
-                                sampler.observe_failure().clone()
+                                sampler.observe_failure().clone().with_latency(latency)
                             }
                         };
                         if proxy.send_event(UserEvent::NetworkSpeed(labels)).is_err() {

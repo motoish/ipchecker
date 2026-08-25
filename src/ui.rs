@@ -1,10 +1,12 @@
 #[cfg(target_os = "macos")]
 use std::cell::RefCell;
 
+#[cfg(target_os = "macos")]
+use crate::net_latency::LatencyLevel;
 use crate::{
     config::{ALLOWED_INTERVAL_MINUTES, Config},
     monitor::{MonitorOutcome, MonitorState},
-    net_speed::{NetworkSpeedLabels, TRAY_TITLE_WIDTH_TEMPLATE},
+    net_speed::{NetworkSpeedLabels, TRAY_LATENCY_WIDTH_TEMPLATE},
     session::Session,
 };
 use tray_icon::{
@@ -20,10 +22,10 @@ use objc2::runtime::AnyObject;
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
-    NSAttributedStringNSStringDrawing, NSCellImagePosition, NSColor, NSCompositingOperation,
-    NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle,
-    NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab, NSTextTabOptionKey,
-    NSView,
+    NSAttributedStringNSStringDrawing, NSBezierPath, NSCellImagePosition, NSColor,
+    NSCompositingOperation, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage,
+    NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab,
+    NSTextTabOptionKey, NSView,
 };
 #[cfg(target_os = "macos")]
 use objc2_foundation::{
@@ -526,12 +528,7 @@ impl TrayUi {
 
     pub fn set_network_speed(&self, labels: &NetworkSpeedLabels, is_visible: bool) {
         #[cfg(target_os = "macos")]
-        set_tray_speed_title(
-            &self.tray,
-            &self.speed_title_view,
-            &labels.tray_title(),
-            is_visible,
-        );
+        set_tray_speed_title(&self.tray, &self.speed_title_view, labels, is_visible);
         #[cfg(not(target_os = "macos"))]
         {
             let _ = labels;
@@ -590,11 +587,16 @@ const TRAY_TRAILING_TRIM: f64 = 6.0;
 const SPEED_FONT_SIZE: f64 = 9.0;
 #[cfg(target_os = "macos")]
 const SPEED_LINE_HEIGHT: f64 = 10.0;
+#[cfg(target_os = "macos")]
+const LATENCY_DOT_DIAMETER: f64 = 6.0;
 
 #[cfg(target_os = "macos")]
 #[derive(Debug)]
 struct SpeedTitleIvars {
-    attributed: RefCell<Retained<NSAttributedString>>,
+    speed: RefCell<Retained<NSAttributedString>>,
+    latency: RefCell<Retained<NSAttributedString>>,
+    latency_level: RefCell<LatencyLevel>,
+    latency_column_width: RefCell<f64>,
     icon: RefCell<Option<Retained<NSImage>>>,
 }
 
@@ -612,14 +614,43 @@ define_class!(
             let bounds = self.bounds();
             let ivars = self.ivars();
             let icon = ivars.icon.borrow();
-            let attributed = ivars.attributed.borrow();
+            let speed = ivars.speed.borrow();
+            let latency = ivars.latency.borrow();
             let icon_size = icon
                 .as_ref()
                 .map(|image| image.size())
                 .unwrap_or(NSSize::new(TRAY_ICON_POINTS, TRAY_ICON_POINTS));
             let icon_y = ((bounds.size.height - icon_size.height) / 2.0).round();
+
+            let latency_column_width = *ivars.latency_column_width.borrow();
+            let latency_level = *ivars.latency_level.borrow();
+            let latency_size = latency.size();
+            let mut x = 0.0;
+            if latency_column_width > 0.0 && latency_size.width > 0.0 {
+                let stack_height = SPEED_LINE_HEIGHT * 2.0;
+                let stack_y = ((bounds.size.height - stack_height) / 2.0).round().max(0.0);
+                let text_x = ((latency_column_width - latency_size.width) / 2.0).max(0.0);
+                let circle_x = ((latency_column_width - LATENCY_DOT_DIAMETER) / 2.0).max(0.0);
+                // Non-flipped NSView: higher y is toward the menu-bar top.
+                let circle_y = stack_y
+                    + SPEED_LINE_HEIGHT
+                    + (SPEED_LINE_HEIGHT - LATENCY_DOT_DIAMETER) / 2.0;
+                draw_latency_dot(
+                    NSRect::new(
+                        NSPoint::new(circle_x, circle_y),
+                        NSSize::new(LATENCY_DOT_DIAMETER, LATENCY_DOT_DIAMETER),
+                    ),
+                    latency_level,
+                );
+                let text_y =
+                    stack_y + ((SPEED_LINE_HEIGHT - latency_size.height) / 2.0).round();
+                latency.drawAtPoint(NSPoint::new(text_x, text_y));
+                x = latency_column_width + TRAY_ICON_TEXT_GAP;
+            }
+
             if let Some(image) = icon.as_ref() {
-                let icon_rect = NSRect::new(NSPoint::new(0.0, icon_y), icon_size);
+                let icon_rect = NSRect::new(NSPoint::new(x, icon_y), icon_size);
+                // Template icons don't auto-tint in custom NSViews; mask labelColor with image alpha.
                 NSColor::labelColor().set();
                 NSRectFill(icon_rect);
                 image.drawInRect_fromRect_operation_fraction(
@@ -629,11 +660,11 @@ define_class!(
                     1.0,
                 );
             }
+            x += icon_size.width + TRAY_ICON_TEXT_GAP;
 
-            let text_size = attributed.size();
-            let text_x = icon_size.width + TRAY_ICON_TEXT_GAP;
-            let text_y = (icon_y + (icon_size.height - text_size.height) / 2.0).round();
-            attributed.drawAtPoint(NSPoint::new(text_x, text_y));
+            let speed_size = speed.size();
+            let speed_y = (icon_y + (icon_size.height - speed_size.height) / 2.0).round();
+            speed.drawAtPoint(NSPoint::new(x, speed_y));
         }
 
         #[unsafe(method(allowsVibrancy))]
@@ -650,16 +681,28 @@ define_class!(
 
 #[cfg(target_os = "macos")]
 impl SpeedTitleView {
-    fn new(mtm: MainThreadMarker, attributed: Retained<NSAttributedString>) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, speed: Retained<NSAttributedString>) -> Retained<Self> {
         let view = mtm.alloc().set_ivars(SpeedTitleIvars {
-            attributed: RefCell::new(attributed),
+            speed: RefCell::new(speed),
+            latency: RefCell::new(speed_attributed_title("", &NSColor::labelColor())),
+            latency_level: RefCell::new(LatencyLevel::High),
+            latency_column_width: RefCell::new(0.0),
             icon: RefCell::new(None),
         });
         unsafe { msg_send![super(view), init] }
     }
 
-    fn set_attributed(&self, attributed: Retained<NSAttributedString>) {
-        *self.ivars().attributed.borrow_mut() = attributed;
+    fn set_speed_labels(
+        &self,
+        speed: Retained<NSAttributedString>,
+        latency: Retained<NSAttributedString>,
+        latency_level: LatencyLevel,
+        latency_column_width: f64,
+    ) {
+        *self.ivars().speed.borrow_mut() = speed;
+        *self.ivars().latency.borrow_mut() = latency;
+        *self.ivars().latency_level.borrow_mut() = latency_level;
+        *self.ivars().latency_column_width.borrow_mut() = latency_column_width;
         self.setNeedsDisplay(true);
     }
 
@@ -693,7 +736,12 @@ fn install_speed_title_view(tray: &TrayIcon) -> Retained<SpeedTitleView> {
 }
 
 #[cfg(target_os = "macos")]
-fn set_tray_speed_title(tray: &TrayIcon, view: &SpeedTitleView, title: &str, is_visible: bool) {
+fn set_tray_speed_title(
+    tray: &TrayIcon,
+    view: &SpeedTitleView,
+    labels: &NetworkSpeedLabels,
+    is_visible: bool,
+) {
     let Some(mtm) = MainThreadMarker::new() else {
         log::warn!("skipped tray speed title; not on the main thread");
         return;
@@ -722,18 +770,44 @@ fn set_tray_speed_title(tray: &TrayIcon, view: &SpeedTitleView, title: &str, is_
         button.addSubview(view);
     }
 
-    let attributed = speed_attributed_title(title, &NSColor::labelColor());
-    let template = speed_attributed_title(TRAY_TITLE_WIDTH_TEMPLATE, &NSColor::labelColor());
-    let text_width = template.size().width.max(attributed.size().width);
+    let color = NSColor::labelColor();
+    let speed_attributed = speed_attributed_title(&labels.speed_tray_title(), &color);
+    let latency_attributed = speed_attributed_title(labels.latency_tray_title(), &color);
+    let latency_template = speed_attributed_title(TRAY_LATENCY_WIDTH_TEMPLATE, &color);
+    let speed_width = speed_attributed.size().width;
+    let latency_column_width = latency_template
+        .size()
+        .width
+        .max(latency_attributed.size().width);
     let icon_size = view.icon_size();
-    let content_width = icon_size.width + TRAY_ICON_TEXT_GAP + text_width;
+    let content_width = latency_column_width
+        + TRAY_ICON_TEXT_GAP
+        + icon_size.width
+        + TRAY_ICON_TEXT_GAP
+        + speed_width;
     let width = (content_width - TRAY_TRAILING_TRIM).max(icon_size.width);
     status_item.setLength(width);
-    view.set_attributed(attributed);
+    view.set_speed_labels(
+        speed_attributed,
+        latency_attributed,
+        labels.latency.level,
+        latency_column_width,
+    );
     view.setFrame(NSRect::new(
         NSPoint::new(0.0, 0.0),
         NSSize::new(width, button.bounds().size.height),
     ));
+}
+
+#[cfg(target_os = "macos")]
+fn draw_latency_dot(rect: NSRect, level: LatencyLevel) {
+    let color = match level {
+        LatencyLevel::Low => NSColor::systemGreenColor(),
+        LatencyLevel::Medium => NSColor::systemYellowColor(),
+        LatencyLevel::High => NSColor::systemRedColor(),
+    };
+    color.set();
+    NSBezierPath::bezierPathWithOvalInRect(rect).fill();
 }
 
 #[cfg(target_os = "macos")]

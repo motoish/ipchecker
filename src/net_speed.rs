@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use std::{io, mem, ptr};
 
 pub const SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
-pub const TRAY_TITLE_WIDTH_TEMPLATE: &str = "↑\t1023.9\tMB/s\n↓\t1023.9\tMB/s";
+pub const TRAY_LATENCY_WIDTH_TEMPLATE: &str = "9999 ms";
 
 const UNKNOWN_NUMBER: &str = "—";
 const KIB: f64 = 1024.0;
@@ -36,6 +36,7 @@ pub struct NetworkRates {
 pub struct NetworkSpeedLabels {
     pub download: String,
     pub upload: String,
+    pub latency: crate::net_latency::LatencyDisplay,
 }
 
 impl NetworkSpeedLabels {
@@ -43,18 +44,29 @@ impl NetworkSpeedLabels {
         Self {
             download: format_with_unit(UNKNOWN_NUMBER, "KB/s"),
             upload: format_with_unit(UNKNOWN_NUMBER, "KB/s"),
+            latency: crate::net_latency::LatencyDisplay::unknown(),
         }
     }
 
-    pub fn from_rates(rates: NetworkRates) -> Self {
+    pub fn from_rates(rates: NetworkRates, latency: crate::net_latency::LatencyDisplay) -> Self {
         Self {
             download: format_bytes_per_second(rates.download_bps),
             upload: format_bytes_per_second(rates.upload_bps),
+            latency,
         }
     }
 
-    pub fn tray_title(&self) -> String {
+    pub fn with_latency(mut self, latency: crate::net_latency::LatencyDisplay) -> Self {
+        self.latency = latency;
+        self
+    }
+
+    pub fn speed_tray_title(&self) -> String {
         format!("↑\t{}\n↓\t{}", self.upload, self.download)
+    }
+
+    pub fn latency_tray_title(&self) -> &str {
+        &self.latency.text
     }
 }
 
@@ -80,7 +92,10 @@ impl NetworkSpeedSampler {
                 while self.recent_rates.len() > RATE_AVERAGE_SAMPLES {
                     self.recent_rates.pop_front();
                 }
-                self.labels = NetworkSpeedLabels::from_rates(average_rates(&self.recent_rates));
+                self.labels = NetworkSpeedLabels::from_rates(
+                    average_rates(&self.recent_rates),
+                    self.labels.latency.clone(),
+                );
             } else {
                 self.recent_rates.clear();
                 self.labels = NetworkSpeedLabels::unknown();

@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use ipchecker::net_latency::{LatencyDisplay, LatencyLevel};
 use ipchecker::net_speed::{
     InterfaceCounters, InterfaceSnapshot, NetworkRates, NetworkSpeedLabels, NetworkSpeedSampler,
     format_bytes_per_second, rates_from_snapshots, should_count_interface,
@@ -53,18 +54,26 @@ fn formats_from_kb_per_second_with_fixed_width() {
 
 #[test]
 fn tray_titles_pin_units_with_tabs() {
-    let labels = NetworkSpeedLabels::from_rates(NetworkRates {
-        download_bps: 1024.0,
-        upload_bps: 1023.0 * 1024.0,
-    });
-    let title = labels.tray_title();
+    let labels = NetworkSpeedLabels::from_rates(
+        NetworkRates {
+            download_bps: 1024.0,
+            upload_bps: 1023.0 * 1024.0,
+        },
+        LatencyDisplay {
+            level: LatencyLevel::Low,
+            text: "42 ms".into(),
+        },
+    );
+    let title = labels.speed_tray_title();
     let lines: Vec<&str> = title.lines().collect();
 
     assert_eq!(lines, ["↑\t1023\tKB/s", "↓\t1\tKB/s"]);
+    assert_eq!(labels.latency_tray_title(), "42 ms");
     assert_eq!(
-        NetworkSpeedLabels::unknown().tray_title(),
+        NetworkSpeedLabels::unknown().speed_tray_title(),
         format!("↑\t{}\n↓\t{}", rate("—", "KB/s"), rate("—", "KB/s"))
     );
+    assert_eq!(NetworkSpeedLabels::unknown().latency_tray_title(), "?");
 }
 
 #[test]
@@ -93,9 +102,10 @@ fn first_sample_stays_unknown_until_a_delta_exists() {
 
     assert_eq!(first, NetworkSpeedLabels::unknown());
     assert_eq!(
-        first.tray_title(),
+        first.speed_tray_title(),
         format!("↑\t{}\n↓\t{}", rate("—", "KB/s"), rate("—", "KB/s"))
     );
+    assert_eq!(first.latency_tray_title(), "?");
 }
 
 #[test]
@@ -113,8 +123,9 @@ fn second_sample_reports_bytes_per_second() {
 
     assert_eq!(labels.download, rate("1", "KB/s"));
     assert_eq!(labels.upload, rate("0", "KB/s"));
+    assert_eq!(labels.latency, LatencyDisplay::unknown());
     assert_eq!(
-        labels.tray_title(),
+        labels.speed_tray_title(),
         format!("↑\t{}\n↓\t{}", rate("0", "KB/s"), rate("1", "KB/s"))
     );
 }
@@ -171,6 +182,7 @@ fn recovery_after_failure_starts_from_a_fresh_baseline() {
     assert_eq!(after_recovery_first, NetworkSpeedLabels::unknown());
     assert_eq!(after_recovery_second.download, rate("1", "KB/s"));
     assert_eq!(after_recovery_second.upload, rate("0", "KB/s"));
+    assert_eq!(after_recovery_second.latency, LatencyDisplay::unknown());
 }
 
 #[test]
@@ -195,6 +207,7 @@ fn displayed_rate_averages_the_last_three_seconds() {
 
     assert_eq!(labels.download, rate("1", "KB/s"));
     assert_eq!(labels.upload, rate("0", "KB/s"));
+    assert_eq!(labels.latency, LatencyDisplay::unknown());
 }
 
 #[test]
