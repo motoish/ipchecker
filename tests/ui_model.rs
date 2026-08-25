@@ -25,6 +25,7 @@ fn model_for(
         interval_minutes: 5,
         is_show_network_speed: true,
         is_show_network_latency: true,
+        is_show_status_icon: true,
     };
     let mut session = Session::new();
     session.set_muted(muted);
@@ -170,7 +171,7 @@ fn exposes_app_edit_menu_installer_for_dialog_shortcuts() {
 fn interval_menu_actions_preserve_the_documented_minute_values() {
     for minutes in [1, 5, 15, 30, 60] {
         assert_eq!(
-            UiCommand::from_menu_action(MenuAction::SetInterval(minutes), false, true, true),
+            UiCommand::from_menu_action(MenuAction::SetInterval(minutes), false, true, true, true),
             UiCommand::SetInterval(minutes)
         );
     }
@@ -191,7 +192,7 @@ fn stateless_menu_actions_map_to_their_matching_commands() {
         (MenuAction::Quit, UiCommand::Quit),
     ] {
         assert_eq!(
-            UiCommand::from_menu_action(action, false, true, true),
+            UiCommand::from_menu_action(action, false, true, true, true),
             expected
         );
     }
@@ -200,11 +201,11 @@ fn stateless_menu_actions_map_to_their_matching_commands() {
 #[test]
 fn mute_menu_action_inverts_only_the_current_session_choice() {
     assert_eq!(
-        UiCommand::from_menu_action(MenuAction::ToggleMuted, false, true, true),
+        UiCommand::from_menu_action(MenuAction::ToggleMuted, false, true, true, true),
         UiCommand::SetMuted(true)
     );
     assert_eq!(
-        UiCommand::from_menu_action(MenuAction::ToggleMuted, true, true, true),
+        UiCommand::from_menu_action(MenuAction::ToggleMuted, true, true, true, true),
         UiCommand::SetMuted(false)
     );
 }
@@ -212,11 +213,11 @@ fn mute_menu_action_inverts_only_the_current_session_choice() {
 #[test]
 fn show_network_speed_menu_action_inverts_the_saved_choice() {
     assert_eq!(
-        UiCommand::from_menu_action(MenuAction::ToggleShowNetworkSpeed, false, true, true),
+        UiCommand::from_menu_action(MenuAction::ToggleShowNetworkSpeed, false, true, true, true),
         UiCommand::SetShowNetworkSpeed(false)
     );
     assert_eq!(
-        UiCommand::from_menu_action(MenuAction::ToggleShowNetworkSpeed, false, false, true),
+        UiCommand::from_menu_action(MenuAction::ToggleShowNetworkSpeed, false, false, true, true),
         UiCommand::SetShowNetworkSpeed(true)
     );
 }
@@ -224,12 +225,36 @@ fn show_network_speed_menu_action_inverts_the_saved_choice() {
 #[test]
 fn show_network_latency_menu_action_inverts_the_saved_choice() {
     assert_eq!(
-        UiCommand::from_menu_action(MenuAction::ToggleShowNetworkLatency, false, true, true),
+        UiCommand::from_menu_action(
+            MenuAction::ToggleShowNetworkLatency,
+            false,
+            true,
+            true,
+            true
+        ),
         UiCommand::SetShowNetworkLatency(false)
     );
     assert_eq!(
-        UiCommand::from_menu_action(MenuAction::ToggleShowNetworkLatency, false, true, false),
+        UiCommand::from_menu_action(
+            MenuAction::ToggleShowNetworkLatency,
+            false,
+            true,
+            false,
+            true
+        ),
         UiCommand::SetShowNetworkLatency(true)
+    );
+}
+
+#[test]
+fn show_status_icon_menu_action_inverts_the_saved_choice() {
+    assert_eq!(
+        UiCommand::from_menu_action(MenuAction::ToggleShowStatusIcon, false, true, true, true),
+        UiCommand::SetShowStatusIcon(false)
+    );
+    assert_eq!(
+        UiCommand::from_menu_action(MenuAction::ToggleShowStatusIcon, false, true, true, false),
+        UiCommand::SetShowStatusIcon(true)
     );
 }
 
@@ -240,6 +265,7 @@ fn ui_model_exposes_show_network_speed_from_config() {
         interval_minutes: 5,
         is_show_network_speed: false,
         is_show_network_latency: true,
+        is_show_status_icon: true,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -261,6 +287,7 @@ fn ui_model_exposes_show_network_latency_from_config() {
         interval_minutes: 5,
         is_show_network_speed: true,
         is_show_network_latency: false,
+        is_show_status_icon: true,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -273,6 +300,52 @@ fn ui_model_exposes_show_network_latency_from_config() {
     let model = UiModel::from_state(&config, &session, &outcome);
 
     assert!(!model.is_show_network_latency);
+}
+
+#[test]
+fn ui_model_exposes_show_status_icon_from_config() {
+    let config = Config {
+        expected_ip: None,
+        interval_minutes: 5,
+        is_show_network_speed: true,
+        is_show_network_latency: true,
+        is_show_status_icon: false,
+    };
+    let session = Session::new();
+    let outcome = MonitorOutcome {
+        state: MonitorState::Unknown,
+        current_ip: None,
+        last_success_ip: None,
+        notification: None,
+    };
+
+    let model = UiModel::from_state(&config, &session, &outcome);
+
+    assert!(!model.is_show_status_icon);
+}
+
+#[test]
+fn ui_model_disables_unchecking_the_last_visible_tray_item() {
+    let config = Config {
+        expected_ip: None,
+        interval_minutes: 5,
+        is_show_network_speed: true,
+        is_show_network_latency: false,
+        is_show_status_icon: false,
+    };
+    let session = Session::new();
+    let outcome = MonitorOutcome {
+        state: MonitorState::Unknown,
+        current_ip: None,
+        last_success_ip: None,
+        notification: None,
+    };
+
+    let model = UiModel::from_state(&config, &session, &outcome);
+
+    assert!(!model.can_toggle_show_network_speed);
+    assert!(model.can_toggle_show_network_latency);
+    assert!(model.can_toggle_show_status_icon);
 }
 
 #[test]

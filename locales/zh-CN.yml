@@ -5,6 +5,7 @@ menu.minutes: "%{minutes} 分钟"
 menu.check_now: 立即检查
 menu.show_network_speed: 显示上下行速度
 menu.show_network_latency: 显示网络延迟
+menu.show_status_icon: 显示状态图标
 menu.mute_session: 本会话不再提醒
 menu.check_for_updates: 检查更新…
 menu.about: 关于 ipchecker…

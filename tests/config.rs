@@ -8,6 +8,7 @@ fn defaults_to_five_minutes_without_expected_ip() {
     assert_eq!(Config::default().expected_ip, None);
     assert!(Config::default().is_show_network_speed);
     assert!(Config::default().is_show_network_latency);
+    assert!(Config::default().is_show_status_icon);
 }
 
 #[test]
@@ -35,6 +36,29 @@ fn invalid_show_network_latency_recovers_to_enabled() {
     let config = Config::from_toml("show_network_latency = \"nope\"\ninterval_minutes = 30\n");
     assert!(config.is_show_network_latency);
     assert_eq!(config.interval_minutes, 30);
+}
+
+#[test]
+fn missing_show_status_icon_defaults_to_enabled() {
+    let config = Config::from_toml("interval_minutes = 15\n");
+    assert!(config.is_show_status_icon);
+}
+
+#[test]
+fn invalid_show_status_icon_recovers_to_enabled() {
+    let config = Config::from_toml("show_status_icon = \"nope\"\ninterval_minutes = 30\n");
+    assert!(config.is_show_status_icon);
+    assert_eq!(config.interval_minutes, 30);
+}
+
+#[test]
+fn all_tray_items_disabled_in_toml_recovers_status_icon() {
+    let config = Config::from_toml(
+        "show_network_speed = false\nshow_network_latency = false\nshow_status_icon = false\n",
+    );
+    assert!(!config.is_show_network_speed);
+    assert!(!config.is_show_network_latency);
+    assert!(config.is_show_status_icon);
 }
 
 #[test]
@@ -69,6 +93,7 @@ fn valid_toml_round_trips() {
         interval_minutes: 15,
         is_show_network_speed: false,
         is_show_network_latency: true,
+        is_show_status_icon: true,
     };
     assert_eq!(Config::from_toml(&expected.to_toml().unwrap()), expected);
 }
@@ -98,12 +123,14 @@ fn save_overwrites_existing_configuration() {
         interval_minutes: 1,
         is_show_network_speed: true,
         is_show_network_latency: true,
+        is_show_status_icon: true,
     };
     let replacement = Config {
         expected_ip: Some(Ipv4Addr::from_str("203.0.113.8").unwrap()),
         interval_minutes: 60,
         is_show_network_speed: false,
         is_show_network_latency: false,
+        is_show_status_icon: true,
     };
 
     store.save(&initial).unwrap();

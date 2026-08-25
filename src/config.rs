@@ -33,6 +33,8 @@ struct RawConfig {
     show_network_speed: Option<bool>,
     #[serde(default, deserialize_with = "recover_bool")]
     show_network_latency: Option<bool>,
+    #[serde(default, deserialize_with = "recover_bool")]
+    show_status_icon: Option<bool>,
 }
 
 fn recover_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -65,6 +67,8 @@ pub struct Config {
     pub is_show_network_speed: bool,
     #[serde(rename = "show_network_latency")]
     pub is_show_network_latency: bool,
+    #[serde(rename = "show_status_icon")]
+    pub is_show_status_icon: bool,
 }
 
 impl Default for Config {
@@ -74,6 +78,19 @@ impl Default for Config {
             interval_minutes: 5,
             is_show_network_speed: true,
             is_show_network_latency: true,
+            is_show_status_icon: true,
+        }
+    }
+}
+
+impl Config {
+    pub fn has_visible_tray_item(&self) -> bool {
+        self.is_show_network_speed || self.is_show_network_latency || self.is_show_status_icon
+    }
+
+    fn normalize_tray_visibility(&mut self) {
+        if !self.has_visible_tray_item() {
+            self.is_show_status_icon = true;
         }
     }
 }
@@ -84,7 +101,7 @@ impl Config {
             return Self::default();
         };
 
-        Self {
+        let mut config = Self {
             expected_ip: raw
                 .expected_ip
                 .and_then(|value| Ipv4Addr::from_str(&value).ok()),
@@ -94,7 +111,10 @@ impl Config {
                 .unwrap_or(5),
             is_show_network_speed: raw.show_network_speed.unwrap_or(true),
             is_show_network_latency: raw.show_network_latency.unwrap_or(true),
-        }
+            is_show_status_icon: raw.show_status_icon.unwrap_or(true),
+        };
+        config.normalize_tray_visibility();
+        config
     }
 
     pub fn to_toml(&self) -> Result<String, ConfigError> {

@@ -5,6 +5,7 @@ menu.minutes: "%{minutes} мин"
 menu.check_now: Проверить сейчас
 menu.show_network_speed: Показывать скорость сети
 menu.show_network_latency: Показывать задержку сети
+menu.show_status_icon: Показывать значок состояния
 menu.mute_session: Не уведомлять в этой сессии
 menu.check_for_updates: Проверить обновления…
 menu.about: О программе ipchecker…

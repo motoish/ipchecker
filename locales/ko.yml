@@ -5,6 +5,7 @@ menu.minutes: "%{minutes}분"
 menu.check_now: 지금 확인
 menu.show_network_speed: 네트워크 속도 표시
 menu.show_network_latency: 네트워크 지연 표시
+menu.show_status_icon: 상태 아이콘 표시
 menu.mute_session: 이 세션에서 알림 끄기
 menu.check_for_updates: 업데이트 확인…
 menu.about: ipchecker 정보…

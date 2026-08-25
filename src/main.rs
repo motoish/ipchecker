@@ -202,6 +202,7 @@ mod macos {
                         self.session.is_muted(),
                         self.config.is_show_network_speed,
                         self.config.is_show_network_latency,
+                        self.config.is_show_status_icon,
                     );
                     self.handle_command(command, control_flow);
                 }
@@ -242,6 +243,9 @@ mod macos {
                 }
                 UiCommand::SetShowNetworkLatency(is_show_network_latency) => {
                     self.set_show_network_latency(is_show_network_latency);
+                }
+                UiCommand::SetShowStatusIcon(is_show_status_icon) => {
+                    self.set_show_status_icon(is_show_status_icon);
                 }
                 UiCommand::CheckForUpdates => self.start_update_check(),
                 UiCommand::About => show_about(),
@@ -323,6 +327,10 @@ mod macos {
         fn set_show_network_speed(&mut self, is_show_network_speed: bool) {
             let mut candidate = self.config.clone();
             candidate.is_show_network_speed = is_show_network_speed;
+            if !candidate.has_visible_tray_item() {
+                self.apply_ui();
+                return;
+            }
             if !self.save_candidate(candidate) {
                 self.apply_ui();
                 return;
@@ -334,11 +342,29 @@ mod macos {
         fn set_show_network_latency(&mut self, is_show_network_latency: bool) {
             let mut candidate = self.config.clone();
             candidate.is_show_network_latency = is_show_network_latency;
+            if !candidate.has_visible_tray_item() {
+                self.apply_ui();
+                return;
+            }
             if !self.save_candidate(candidate) {
                 self.apply_ui();
                 return;
             }
             self.sync_network_metrics_sampling();
+            self.apply_ui();
+        }
+
+        fn set_show_status_icon(&mut self, is_show_status_icon: bool) {
+            let mut candidate = self.config.clone();
+            candidate.is_show_status_icon = is_show_status_icon;
+            if !candidate.has_visible_tray_item() {
+                self.apply_ui();
+                return;
+            }
+            if !self.save_candidate(candidate) {
+                self.apply_ui();
+                return;
+            }
             self.apply_ui();
         }
 
@@ -566,6 +592,7 @@ mod macos {
                 &self.speed_labels,
                 self.config.is_show_network_speed,
                 self.config.is_show_network_latency,
+                self.config.is_show_status_icon,
             );
         }
 
@@ -580,6 +607,7 @@ mod macos {
                 &self.speed_labels,
                 self.config.is_show_network_speed,
                 self.config.is_show_network_latency,
+                self.config.is_show_status_icon,
             );
         }
 

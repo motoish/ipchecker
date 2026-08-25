@@ -67,6 +67,10 @@ pub struct UiModel {
     pub muted: bool,
     pub is_show_network_speed: bool,
     pub is_show_network_latency: bool,
+    pub is_show_status_icon: bool,
+    pub can_toggle_show_network_speed: bool,
+    pub can_toggle_show_network_latency: bool,
+    pub can_toggle_show_status_icon: bool,
     pub icon_state: IconState,
     pub tooltip: String,
 }
@@ -117,6 +121,16 @@ impl UiModel {
             muted: session.is_muted(),
             is_show_network_speed: config.is_show_network_speed,
             is_show_network_latency: config.is_show_network_latency,
+            is_show_status_icon: config.is_show_status_icon,
+            can_toggle_show_network_speed: !config.is_show_network_speed
+                || config.is_show_network_latency
+                || config.is_show_status_icon,
+            can_toggle_show_network_latency: !config.is_show_network_latency
+                || config.is_show_network_speed
+                || config.is_show_status_icon,
+            can_toggle_show_status_icon: !config.is_show_status_icon
+                || config.is_show_network_speed
+                || config.is_show_network_latency,
             icon_state,
             tooltip,
         }
@@ -133,6 +147,7 @@ pub enum MenuAction {
     ToggleMuted,
     ToggleShowNetworkSpeed,
     ToggleShowNetworkLatency,
+    ToggleShowStatusIcon,
     CheckForUpdates,
     About,
     Quit,
@@ -148,6 +163,7 @@ pub enum UiCommand {
     SetMuted(bool),
     SetShowNetworkSpeed(bool),
     SetShowNetworkLatency(bool),
+    SetShowStatusIcon(bool),
     CheckForUpdates,
     About,
     Quit,
@@ -159,6 +175,7 @@ impl UiCommand {
         is_muted: bool,
         is_show_network_speed: bool,
         is_show_network_latency: bool,
+        is_show_status_icon: bool,
     ) -> Self {
         match action {
             MenuAction::CopyCurrentIp => Self::CopyCurrentIp,
@@ -171,6 +188,7 @@ impl UiCommand {
             MenuAction::ToggleShowNetworkLatency => {
                 Self::SetShowNetworkLatency(!is_show_network_latency)
             }
+            MenuAction::ToggleShowStatusIcon => Self::SetShowStatusIcon(!is_show_status_icon),
             MenuAction::CheckForUpdates => Self::CheckForUpdates,
             MenuAction::About => Self::About,
             MenuAction::Quit => Self::Quit,
@@ -404,6 +422,7 @@ pub struct TrayUi {
     check_now_item: MenuItem,
     show_network_speed_item: CheckMenuItem,
     show_network_latency_item: CheckMenuItem,
+    show_status_icon_item: CheckMenuItem,
     mute_item: CheckMenuItem,
     check_for_updates_item: MenuItem,
     about_item: MenuItem,
@@ -451,6 +470,12 @@ impl TrayUi {
             model.is_show_network_latency,
             None,
         );
+        let show_status_icon_item = CheckMenuItem::new(
+            t!("menu.show_status_icon").as_ref(),
+            true,
+            model.is_show_status_icon,
+            None,
+        );
         let mute_item =
             CheckMenuItem::new(t!("menu.mute_session").as_ref(), true, model.muted, None);
         let check_for_updates_item =
@@ -477,6 +502,7 @@ impl TrayUi {
             &separators[2],
             &show_network_speed_item,
             &show_network_latency_item,
+            &show_status_icon_item,
             &mute_item,
             &separators[3],
             &check_for_updates_item,
@@ -505,6 +531,7 @@ impl TrayUi {
             check_now_item,
             show_network_speed_item,
             show_network_latency_item,
+            show_status_icon_item,
             mute_item,
             check_for_updates_item,
             about_item,
@@ -517,6 +544,7 @@ impl TrayUi {
             &NetworkSpeedLabels::unknown(),
             model.is_show_network_speed,
             model.is_show_network_latency,
+            model.is_show_status_icon,
         );
         Ok(ui)
     }
@@ -534,8 +562,16 @@ impl TrayUi {
         }
         self.show_network_speed_item
             .set_checked(model.is_show_network_speed);
+        self.show_network_speed_item
+            .set_enabled(model.can_toggle_show_network_speed);
         self.show_network_latency_item
             .set_checked(model.is_show_network_latency);
+        self.show_network_latency_item
+            .set_enabled(model.can_toggle_show_network_latency);
+        self.show_status_icon_item
+            .set_checked(model.is_show_status_icon);
+        self.show_status_icon_item
+            .set_enabled(model.can_toggle_show_status_icon);
         self.mute_item.set_checked(model.muted);
         self.tray.set_tooltip(Some(&model.tooltip))?;
         self.tray.set_icon_with_as_template(
@@ -554,6 +590,7 @@ impl TrayUi {
         labels: &NetworkSpeedLabels,
         is_show_network_speed: bool,
         is_show_network_latency: bool,
+        is_show_status_icon: bool,
     ) {
         #[cfg(target_os = "macos")]
         set_tray_speed_title(
@@ -562,12 +599,14 @@ impl TrayUi {
             labels,
             is_show_network_speed,
             is_show_network_latency,
+            is_show_status_icon,
         );
         #[cfg(not(target_os = "macos"))]
         {
             let _ = labels;
             let _ = is_show_network_speed;
             let _ = is_show_network_latency;
+            let _ = is_show_status_icon;
         }
     }
 
@@ -594,6 +633,9 @@ impl TrayUi {
         if id == self.show_network_latency_item.id() {
             return Some(MenuAction::ToggleShowNetworkLatency);
         }
+        if id == self.show_status_icon_item.id() {
+            return Some(MenuAction::ToggleShowStatusIcon);
+        }
         if id == self.mute_item.id() {
             return Some(MenuAction::ToggleMuted);
         }
@@ -612,6 +654,14 @@ impl TrayUi {
             .find(|interval| id == interval.item.id())
             .map(|interval| MenuAction::SetInterval(interval.minutes))
     }
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TrayMetricsVisibility {
+    is_show_network_latency: bool,
+    is_show_network_speed: bool,
+    is_show_status_icon: bool,
 }
 
 #[cfg(target_os = "macos")]
@@ -638,6 +688,7 @@ struct SpeedTitleIvars {
     latency_column_width: RefCell<f64>,
     is_show_network_latency: RefCell<bool>,
     is_show_network_speed: RefCell<bool>,
+    is_show_status_icon: RefCell<bool>,
     icon: RefCell<Option<Retained<NSImage>>>,
     last_latency_text: RefCell<String>,
     last_speed_text: RefCell<String>,
@@ -659,17 +710,22 @@ define_class!(
             let icon = ivars.icon.borrow();
             let speed = ivars.speed.borrow();
             let latency = ivars.latency.borrow();
-            let icon_size = icon
-                .as_ref()
-                .map(|image| image.size())
-                .unwrap_or(NSSize::new(TRAY_ICON_POINTS, TRAY_ICON_POINTS));
-            let icon_y = ((bounds.size.height - icon_size.height) / 2.0).round();
 
             let latency_column_width = *ivars.latency_column_width.borrow();
             let latency_level = *ivars.latency_level.borrow();
             let is_show_network_latency = *ivars.is_show_network_latency.borrow();
             let is_show_network_speed = *ivars.is_show_network_speed.borrow();
+            let is_show_status_icon = *ivars.is_show_status_icon.borrow();
             let latency_size = latency.size();
+            let icon_size = if is_show_status_icon {
+                icon
+                    .as_ref()
+                    .map(|image| image.size())
+                    .unwrap_or(NSSize::new(TRAY_ICON_POINTS, TRAY_ICON_POINTS))
+            } else {
+                NSSize::new(0.0, TRAY_ICON_POINTS)
+            };
+            let icon_y = ((bounds.size.height - icon_size.height) / 2.0).round();
             let mut x = 0.0;
             let mut latency_dot_rect = None;
             let mut latency_text_point = None;
@@ -695,11 +751,13 @@ define_class!(
                 x = latency_column_width + TRAY_ICON_TEXT_GAP;
             }
 
-            if let Some(image) = icon.as_ref() {
-                let icon_rect = NSRect::new(NSPoint::new(x, icon_y), icon_size);
-                draw_tray_template_icon(image, icon_rect);
+            if is_show_status_icon {
+                if let Some(image) = icon.as_ref() {
+                    let icon_rect = NSRect::new(NSPoint::new(x, icon_y), icon_size);
+                    draw_tray_template_icon(image, icon_rect);
+                }
+                x += icon_size.width + TRAY_ICON_TEXT_GAP;
             }
-            x += icon_size.width + TRAY_ICON_TEXT_GAP;
 
             if is_show_network_speed {
                 let speed_size = speed.size();
@@ -743,6 +801,7 @@ impl SpeedTitleView {
             latency_column_width: RefCell::new(0.0),
             is_show_network_latency: RefCell::new(true),
             is_show_network_speed: RefCell::new(true),
+            is_show_status_icon: RefCell::new(true),
             icon: RefCell::new(None),
             last_latency_text: RefCell::new(String::new()),
             last_speed_text: RefCell::new(String::new()),
@@ -756,14 +815,14 @@ impl SpeedTitleView {
         latency: Retained<NSAttributedString>,
         latency_level: LatencyLevel,
         latency_column_width: f64,
-        is_show_network_latency: bool,
-        is_show_network_speed: bool,
+        visibility: TrayMetricsVisibility,
     ) {
         let latency_text = latency.string().to_string();
         let speed_text = speed.string().to_string();
         let ivars = self.ivars();
-        if *ivars.is_show_network_latency.borrow() == is_show_network_latency
-            && *ivars.is_show_network_speed.borrow() == is_show_network_speed
+        if *ivars.is_show_network_latency.borrow() == visibility.is_show_network_latency
+            && *ivars.is_show_network_speed.borrow() == visibility.is_show_network_speed
+            && *ivars.is_show_status_icon.borrow() == visibility.is_show_status_icon
             && *ivars.latency_level.borrow() == latency_level
             && (*ivars.latency_column_width.borrow() - latency_column_width).abs() < f64::EPSILON
             && *ivars.last_latency_text.borrow() == latency_text
@@ -776,8 +835,9 @@ impl SpeedTitleView {
         *ivars.latency.borrow_mut() = latency;
         *ivars.latency_level.borrow_mut() = latency_level;
         *ivars.latency_column_width.borrow_mut() = latency_column_width;
-        *ivars.is_show_network_latency.borrow_mut() = is_show_network_latency;
-        *ivars.is_show_network_speed.borrow_mut() = is_show_network_speed;
+        *ivars.is_show_network_latency.borrow_mut() = visibility.is_show_network_latency;
+        *ivars.is_show_network_speed.borrow_mut() = visibility.is_show_network_speed;
+        *ivars.is_show_status_icon.borrow_mut() = visibility.is_show_status_icon;
         *ivars.last_latency_text.borrow_mut() = latency_text;
         *ivars.last_speed_text.borrow_mut() = speed_text;
         self.setNeedsDisplay(true);
@@ -788,8 +848,17 @@ impl SpeedTitleView {
         self.setNeedsDisplay(true);
     }
 
+    fn clear_icon(&self) {
+        *self.ivars().icon.borrow_mut() = None;
+        self.setNeedsDisplay(true);
+    }
+
     fn icon_size(&self) -> NSSize {
-        self.ivars()
+        let ivars = self.ivars();
+        if !*ivars.is_show_status_icon.borrow() {
+            return NSSize::new(0.0, TRAY_ICON_POINTS);
+        }
+        ivars
             .icon
             .borrow()
             .as_ref()
@@ -825,6 +894,7 @@ fn set_tray_speed_title(
     labels: &NetworkSpeedLabels,
     is_show_network_speed: bool,
     is_show_network_latency: bool,
+    is_show_status_icon: bool,
 ) {
     let Some(mtm) = MainThreadMarker::new() else {
         log::warn!("skipped tray speed title; not on the main thread");
@@ -837,8 +907,8 @@ fn set_tray_speed_title(
         return;
     };
 
-    let is_any_visible = is_show_network_speed || is_show_network_latency;
-    if !is_any_visible {
+    let is_metrics_visible = is_show_network_speed || is_show_network_latency;
+    if !is_metrics_visible {
         view.setHidden(true);
         status_item.setLength(-1.0);
         return;
@@ -847,8 +917,13 @@ fn set_tray_speed_title(
     view.setHidden(false);
     button.setTitle(&NSString::from_str(""));
     button.setImagePosition(NSCellImagePosition::NoImage);
-    if let Some(image) = button.image() {
-        view.set_icon(image);
+    if is_show_status_icon {
+        if let Some(image) = button.image() {
+            view.set_icon(image);
+            button.setImage(None);
+        }
+    } else {
+        view.clear_icon();
         button.setImage(None);
     }
     if unsafe { view.superview() }.is_none() {
@@ -873,24 +948,40 @@ fn set_tray_speed_title(
         0.0
     };
     let icon_size = view.icon_size();
-    let mut content_width = icon_size.width;
+    let mut content_width = 0.0;
     if is_show_network_latency {
-        content_width += latency_column_width + TRAY_ICON_TEXT_GAP;
+        content_width += latency_column_width;
+    }
+    if is_show_status_icon {
+        if is_show_network_latency {
+            content_width += TRAY_ICON_TEXT_GAP;
+        }
+        content_width += icon_size.width;
     }
     if is_show_network_speed {
-        content_width += TRAY_ICON_TEXT_GAP + speed_width;
+        if is_show_network_latency || is_show_status_icon {
+            content_width += TRAY_ICON_TEXT_GAP;
+        }
+        content_width += speed_width;
     }
     // Do not shrink below measured content: an earlier trailing trim clipped
     // "KB/s" on external displays with a different backing scale.
-    let width = (content_width + TRAY_TRAILING_PAD).max(icon_size.width);
+    let width = (content_width + TRAY_TRAILING_PAD).max(if is_show_status_icon {
+        icon_size.width
+    } else {
+        0.0
+    });
     status_item.setLength(width);
     view.set_speed_labels(
         speed_attributed,
         latency_attributed,
         labels.latency.level,
         latency_column_width,
-        is_show_network_latency,
-        is_show_network_speed,
+        TrayMetricsVisibility {
+            is_show_network_latency,
+            is_show_network_speed,
+            is_show_status_icon,
+        },
     );
     let button_height = button.bounds().size.height;
     let frame_width = button.bounds().size.width.max(width);
