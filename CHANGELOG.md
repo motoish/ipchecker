@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.8.26-11653d40
+
+### Documentation
+
+- Update README.md by @motoish
+
+### Features
+
+- Add status icon visibility toggle with minimum one tray item by @motoish
+
 ## 2026.8.26-6bbad949
 
 ### Bug Fixes
