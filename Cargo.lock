@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "ipchecker"
-version = "2026.8.21-67528bea"
+version = "2026.8.25-a39764ac"
 dependencies = [
  "arboard",
  "dirs",

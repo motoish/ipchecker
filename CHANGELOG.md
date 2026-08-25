@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026.8.25-a39764ac
+
+### Documentation
+
+- Update README.md by @motoish
+
+### Features
+
+- Add net_latency by @motoish
+- Make net_latency optionally display by @motoish
+
 ## 2026.8.21-67528bea
 
 ### Bug Fixes
