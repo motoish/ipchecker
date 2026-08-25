@@ -618,9 +618,10 @@ impl TrayUi {
 const TRAY_ICON_POINTS: f64 = 18.0;
 #[cfg(target_os = "macos")]
 const TRAY_ICON_TEXT_GAP: f64 = 2.0;
-/// NSStatusBarButton keeps a trailing inset after we draw from x = 0.
+/// Extra points after measured content so multi-display scale rounding
+/// cannot clip the trailing unit character (e.g. the "s" in "KB/s").
 #[cfg(target_os = "macos")]
-const TRAY_TRAILING_TRIM: f64 = 6.0;
+const TRAY_TRAILING_PAD: f64 = 2.0;
 #[cfg(target_os = "macos")]
 const SPEED_FONT_SIZE: f64 = 9.0;
 #[cfg(target_os = "macos")]
@@ -879,7 +880,9 @@ fn set_tray_speed_title(
     if is_show_network_speed {
         content_width += TRAY_ICON_TEXT_GAP + speed_width;
     }
-    let width = (content_width - TRAY_TRAILING_TRIM).max(icon_size.width);
+    // Do not shrink below measured content: an earlier trailing trim clipped
+    // "KB/s" on external displays with a different backing scale.
+    let width = (content_width + TRAY_TRAILING_PAD).max(icon_size.width);
     status_item.setLength(width);
     view.set_speed_labels(
         speed_attributed,
@@ -889,9 +892,11 @@ fn set_tray_speed_title(
         is_show_network_latency,
         is_show_network_speed,
     );
+    let button_height = button.bounds().size.height;
+    let frame_width = button.bounds().size.width.max(width);
     view.setFrame(NSRect::new(
         NSPoint::new(0.0, 0.0),
-        NSSize::new(width, button.bounds().size.height),
+        NSSize::new(frame_width, button_height),
     ));
 }
 
