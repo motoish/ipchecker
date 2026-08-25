@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026.8.25-de5f0599
+
+### Miscellaneous Tasks
+
+- Format pre-release changelog by @motoish
+
+## 2026.8.25-af6d9fe6
+
+### Miscellaneous Tasks
+
+- Optimize pre-release changelog by @motoish
+
 ## 2026.8.25-14dae25c
 
 ### Features
