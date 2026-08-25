@@ -799,10 +799,18 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
         .iter()
         .position(|step| step["name"] == "Verify immutable assets")
         .expect("immutable asset verification step");
-    let notes_download_index = steps
+    let stable_range_index = steps
         .iter()
-        .position(|step| step["name"] == "Download immutable release notes")
-        .expect("immutable Release Notes download step");
+        .position(|step| step["name"] == "Resolve stable release notes range")
+        .expect("stable Release Notes range step");
+    let stable_notes_index = steps
+        .iter()
+        .position(|step| step["name"] == "Generate stable release notes")
+        .expect("stable Release Notes generation step");
+    let stable_notes_check_index = steps
+        .iter()
+        .position(|step| step["name"] == "Verify stable release notes scope")
+        .expect("stable Release Notes verification step");
     let upload_index = steps
         .iter()
         .position(|step| step["name"] == "Upload stable assets")
@@ -818,13 +826,18 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     assert!(
         checkout_index < download_index
             && download_index < preflight_index
-            && preflight_index < notes_download_index
-            && notes_download_index < calver_index
-            && calver_index < upload_index
-            && calver_index < notes_update_index
+            && preflight_index < calver_index
+            && calver_index < stable_range_index
+            && stable_range_index < stable_notes_index
+            && stable_notes_index < stable_notes_check_index
+            && stable_notes_check_index < notes_update_index
             && notes_update_index < upload_index
             && upload_index < verify_index
     );
+
+    let checkout = steps[checkout_index];
+    assert_eq!(checkout["with"]["fetch-depth"], 0);
+    assert_eq!(checkout["with"]["fetch-tags"], true);
 
     let download_run = steps[download_index]["run"].as_str().unwrap();
     assert!(download_run.contains("ipchecker.zip"));
@@ -837,18 +850,44 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     assert!(preflight_run.contains("scripts/verify-app-archive.sh"));
     assert!(preflight_run.contains("jq -e"));
 
-    let notes_download = steps[notes_download_index];
-    let notes_download_run = notes_download["run"].as_str().unwrap();
-    assert!(notes_download_run.contains("gh release view"));
-    assert!(notes_download_run.contains("--repo \"$GITHUB_REPOSITORY\""));
-    assert!(notes_download_run.contains("--json body"));
-    assert!(notes_download_run.contains("promoted/release-notes.md"));
-
     let calver = steps[calver_index];
     assert_eq!(calver["uses"], "motoish/calver-release-action@v1");
     assert_eq!(calver["with"]["mode"], "promote");
     assert_eq!(calver["with"]["source_tag"], "${{ inputs.source_tag }}");
     assert_eq!(calver["with"]["token"], "${{ github.token }}");
+
+    let stable_range = steps[stable_range_index];
+    assert_eq!(stable_range["id"], "stable_range");
+    assert_eq!(
+        stable_range["env"]["SOURCE_TAG"],
+        "${{ inputs.source_tag }}"
+    );
+    let stable_range_run = stable_range["run"].as_str().unwrap();
+    assert!(stable_range_run.contains("git rev-list -n 1 \"$SOURCE_TAG\""));
+    assert!(stable_range_run.contains("git tag --merged \"$source_commit^\""));
+    assert!(stable_range_run.contains("^v20[0-9]{2}\\.([1-9]|1[0-2])$"));
+    assert!(stable_range_run.contains("range=\"$previous_stable..$source_commit\""));
+    assert!(stable_range_run.contains("range=\"$source_commit\""));
+    assert!(stable_range_run.contains("$GITHUB_OUTPUT"));
+
+    let stable_notes = steps[stable_notes_index];
+    assert_eq!(stable_notes["uses"], "orhun/git-cliff-action@v4");
+    assert_eq!(stable_notes["with"]["config"], "cliff.toml");
+    let stable_notes_args = stable_notes["with"]["args"].as_str().unwrap();
+    assert!(stable_notes_args.contains("--ignore-tags '.*'"));
+    assert!(stable_notes_args.contains("--tag ${{ steps.calver.outputs.channel_tag }}"));
+    assert!(stable_notes_args.contains("${{ steps.stable_range.outputs.range }}"));
+    assert_eq!(stable_notes["env"]["OUTPUT"], "promoted/release-notes.md");
+
+    let stable_notes_check = steps[stable_notes_check_index];
+    assert_eq!(
+        stable_notes_check["env"]["STABLE_TAG"],
+        "${{ steps.calver.outputs.channel_tag }}"
+    );
+    let stable_notes_check_run = stable_notes_check["run"].as_str().unwrap();
+    assert!(stable_notes_check_run.contains("test -s promoted/release-notes.md"));
+    assert!(stable_notes_check_run.contains("grep -c '^## '"));
+    assert!(stable_notes_check_run.contains("expected_heading=\"## ${STABLE_TAG#v}\""));
 
     let notes_update = steps[notes_update_index];
     assert_eq!(

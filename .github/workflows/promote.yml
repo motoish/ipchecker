@@ -19,6 +19,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Download immutable assets
         env:
@@ -55,16 +58,6 @@ jobs:
             exit 1
           fi
 
-      - name: Download immutable release notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
-        run: |
-          gh release view "$SOURCE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --json body \
-            --jq .body > promoted/release-notes.md
-
       - name: Promote monthly stable release
         id: calver
         uses: motoish/calver-release-action@v1
@@ -72,6 +65,46 @@ jobs:
           mode: promote
           source_tag: ${{ inputs.source_tag }}
           token: ${{ github.token }}
+
+      - name: Resolve stable release notes range
+        id: stable_range
+        env:
+          SOURCE_TAG: ${{ inputs.source_tag }}
+        run: |
+          set -euo pipefail
+          source_commit=$(git rev-list -n 1 "$SOURCE_TAG")
+          previous_stable=$(git tag --merged "$source_commit^" --sort=-version:refname \
+            | grep -E '^v20[0-9]{2}\.([1-9]|1[0-2])$' \
+            | head -n 1 || true)
+          if [[ -n "$previous_stable" ]]; then
+            range="$previous_stable..$source_commit"
+          else
+            range="$source_commit"
+          fi
+          echo "range=$range" >> "$GITHUB_OUTPUT"
+
+      - name: Generate stable release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --ignore-tags '.*' --tag ${{ steps.calver.outputs.channel_tag }} ${{ steps.stable_range.outputs.range }}
+        env:
+          OUTPUT: promoted/release-notes.md
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Verify stable release notes scope
+        env:
+          STABLE_TAG: ${{ steps.calver.outputs.channel_tag }}
+        run: |
+          set -euo pipefail
+          test -s promoted/release-notes.md
+          section_count=$(grep -c '^## ' promoted/release-notes.md || true)
+          expected_heading="## ${STABLE_TAG#v}"
+          if [[ "$section_count" != "1" ]] || ! grep -Fqx "$expected_heading" promoted/release-notes.md; then
+            echo "Stable release notes must contain exactly the $expected_heading section" >&2
+            exit 1
+          fi
 
       - name: Update stable release notes
         env:
