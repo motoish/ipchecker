@@ -19,14 +19,21 @@ pub struct NotificationCoordinator {
 }
 
 impl NotificationCoordinator {
-    pub fn observe(&mut self, decision: Option<NotificationDecision>, muted: bool) {
-        if muted {
+    pub fn observe(
+        &mut self,
+        decision: Option<NotificationDecision>,
+        muted: bool,
+        is_show_status_icon: bool,
+    ) {
+        if muted || !is_show_status_icon {
             self.active = None;
             self.delivered = false;
             return;
         }
 
-        if self.active != decision {
+        let is_repeatable_mismatch =
+            matches!(decision, Some(NotificationDecision::Mismatch { .. }));
+        if is_repeatable_mismatch || self.active != decision {
             self.active = decision;
             self.delivered = false;
         }

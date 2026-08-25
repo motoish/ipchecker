@@ -183,8 +183,11 @@ mod macos {
                         self.config.expected_ip,
                         self.session.is_muted(),
                     );
-                    self.notification_coordinator
-                        .observe(outcome.notification.clone(), self.session.is_muted());
+                    self.notification_coordinator.observe(
+                        outcome.notification.clone(),
+                        self.session.is_muted(),
+                        self.config.is_show_status_icon,
+                    );
                     self.outcome = outcome;
                     self.apply_ui();
                     self.deliver_pending_notification();
@@ -302,7 +305,8 @@ mod macos {
         fn set_muted(&mut self, muted: bool) {
             self.session.set_muted(muted);
             if muted {
-                self.notification_coordinator.observe(None, true);
+                self.notification_coordinator
+                    .observe(None, true, self.config.is_show_status_icon);
             }
             self.apply_ui();
         }
@@ -364,6 +368,9 @@ mod macos {
             if !self.save_candidate(candidate) {
                 self.apply_ui();
                 return;
+            }
+            if !is_show_status_icon {
+                self.notification_coordinator.observe(None, false, false);
             }
             self.apply_ui();
         }
@@ -506,7 +513,8 @@ mod macos {
         }
 
         fn recompare_expected_and_check(&mut self) {
-            self.notification_coordinator.observe(None, false);
+            self.notification_coordinator
+                .observe(None, false, self.config.is_show_status_icon);
             self.outcome = self.outcome.recompare_expected(self.config.expected_ip);
             self.apply_ui();
             self.send_worker_command(WorkerCommand::CheckNow);
@@ -538,7 +546,11 @@ mod macos {
                     self.deliver_pending_notification();
                 }
                 Err(error) => {
-                    self.notification_coordinator.observe(None, false);
+                    self.notification_coordinator.observe(
+                        None,
+                        false,
+                        self.config.is_show_status_icon,
+                    );
                     log::warn!("notification authorization unavailable: {error}");
                 }
             }
