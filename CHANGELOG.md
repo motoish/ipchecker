@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.26-9ed418cb
+
+### Documentation
+
+- Clarify notifications when status icon is hidden by @motoish
+
 ## 2026.8.26-92e7d097
 
 ### Documentation
