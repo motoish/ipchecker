@@ -60,7 +60,7 @@ fn delivered_mismatch_is_rearmed_on_each_poll() {
 }
 
 #[test]
-fn hidden_status_icon_suppresses_notifications() {
+fn hidden_status_icon_suppresses_mismatch_notifications() {
     let mut coordinator = NotificationCoordinator::default();
     let mismatch = NotificationDecision::Mismatch {
         current: ip("192.0.2.1"),
@@ -68,6 +68,15 @@ fn hidden_status_icon_suppresses_notifications() {
     };
 
     coordinator.observe(Some(mismatch), false, false);
+
+    assert_eq!(coordinator.pending(), None);
+}
+
+#[test]
+fn hidden_status_icon_suppresses_fetch_failure_notifications() {
+    let mut coordinator = NotificationCoordinator::default();
+
+    coordinator.observe(Some(NotificationDecision::FetchFailure), false, false);
 
     assert_eq!(coordinator.pending(), None);
 }
