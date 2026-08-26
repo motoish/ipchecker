@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.26-c9295d4f
+
+### Bug Fixes
+
+- Restore native tray icon when only status icon is shown by @motoish
+
 ## 2026.8.26-9ed418cb
 
 ### Documentation
