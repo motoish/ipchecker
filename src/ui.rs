@@ -853,6 +853,10 @@ impl SpeedTitleView {
         self.setNeedsDisplay(true);
     }
 
+    fn take_icon(&self) -> Option<Retained<NSImage>> {
+        self.ivars().icon.borrow_mut().take()
+    }
+
     fn icon_size(&self) -> NSSize {
         let ivars = self.ivars();
         if !*ivars.is_show_status_icon.borrow() {
@@ -909,7 +913,23 @@ fn set_tray_speed_title(
 
     let is_metrics_visible = is_show_network_speed || is_show_network_latency;
     if !is_metrics_visible {
+        // Custom view owned the drawn icon while metrics were visible; hand it
+        // back to the native button so icon-only mode keeps a menu-bar entry.
         view.setHidden(true);
+        if is_show_status_icon {
+            if button.image().is_none() {
+                if let Some(image) = view.take_icon() {
+                    button.setImage(Some(&image));
+                }
+            } else {
+                view.clear_icon();
+            }
+            button.setImagePosition(NSCellImagePosition::ImageOnly);
+        } else {
+            view.clear_icon();
+            button.setImage(None);
+            button.setImagePosition(NSCellImagePosition::NoImage);
+        }
         status_item.setLength(-1.0);
         return;
     }
