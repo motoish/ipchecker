@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.26-92e7d097
+
+### Documentation
+
+- Move releasing details out of README by @motoish
+
 ## 2026.8.26-6488a93d
 
 ### Bug Fixes
