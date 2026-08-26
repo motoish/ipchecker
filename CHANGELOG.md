@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.8.26-6488a93d
+
+### Bug Fixes
+
+- Rearm mismatch notifications while status icon is visible by @motoish
+
+### Documentation
+
+- Update README.md by @motoish
+
 ## 2026.8.26-11653d40
 
 ### Documentation
