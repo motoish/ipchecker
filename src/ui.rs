@@ -23,9 +23,9 @@ use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_cl
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
     NSAttributedStringNSStringDrawing, NSBezierPath, NSCellImagePosition, NSColor,
-    NSCompositingOperation, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
-    NSGraphicsContext, NSImage, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSRectFill,
-    NSTextAlignment, NSTextTab, NSTextTabOptionKey, NSView,
+    NSCompositingOperation, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage,
+    NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab,
+    NSTextTabOptionKey, NSView,
 };
 #[cfg(target_os = "macos")]
 use objc2_foundation::{
@@ -348,13 +348,14 @@ fn coverage_from_distance(distance: f32, half_width: f32) -> f32 {
 
 fn disc_coverage(distance: f32, radius: f32) -> f32 {
     let aa = 0.65_f32;
-    if distance <= radius - aa {
+    let coverage = if distance <= radius - aa {
         1.0
     } else if distance >= radius + aa {
         0.0
     } else {
         1.0 - (distance - (radius - aa)) / (2.0 * aa)
-    }
+    };
+    if coverage < 0.25 { 0.0 } else { coverage }
 }
 
 fn draw_filled_disc(rgba: &mut [u8]) {
@@ -753,7 +754,10 @@ define_class!(
 
             if is_show_status_icon {
                 if let Some(image) = icon.as_ref() {
-                    let icon_rect = NSRect::new(NSPoint::new(x, icon_y), icon_size);
+                    let icon_rect = pixel_aligned_rect(
+                        NSRect::new(NSPoint::new(x, icon_y), icon_size),
+                        self.backing_scale_factor(),
+                    );
                     draw_tray_template_icon(image, icon_rect);
                 }
                 x += icon_size.width + TRAY_ICON_TEXT_GAP;
@@ -1013,13 +1017,9 @@ fn set_tray_speed_title(
 
 #[cfg(target_os = "macos")]
 fn draw_tray_template_icon(image: &NSImage, icon_rect: NSRect) {
-    let clip_rect = icon_disc_rect(icon_rect);
-    if let Some(context) = NSGraphicsContext::currentContext() {
-        context.saveGraphicsState();
-    }
-    NSBezierPath::bezierPathWithOvalInRect(clip_rect).addClip();
-    // Template icons don't auto-tint in custom NSViews; mask labelColor with image alpha.
-    NSColor::labelColor().set();
+    // Template icons don't auto-tint in custom NSViews. Keep the dynamic
+    // light/dark label color, but match native status icons with full opacity.
+    NSColor::labelColor().colorWithAlphaComponent(1.0).set();
     NSRectFill(icon_rect);
     image.drawInRect_fromRect_operation_fraction(
         icon_rect,
@@ -1027,25 +1027,6 @@ fn draw_tray_template_icon(image: &NSImage, icon_rect: NSRect) {
         NSCompositingOperation::DestinationIn,
         1.0,
     );
-    if let Some(context) = NSGraphicsContext::currentContext() {
-        context.restoreGraphicsState();
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn icon_disc_rect(icon_rect: NSRect) -> NSRect {
-    // Match the carved 36pt disc scaled into the 18pt tray icon rect.
-    const DISC_INSET: f64 = 0.9;
-    NSRect::new(
-        NSPoint::new(
-            icon_rect.origin.x + DISC_INSET,
-            icon_rect.origin.y + DISC_INSET,
-        ),
-        NSSize::new(
-            (icon_rect.size.width - DISC_INSET * 2.0).max(0.0),
-            (icon_rect.size.height - DISC_INSET * 2.0).max(0.0),
-        ),
-    )
 }
 
 #[cfg(target_os = "macos")]

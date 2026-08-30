@@ -74,6 +74,26 @@ fn template_icons_use_filled_disc_with_carved_glyphs() {
 }
 
 #[test]
+fn template_icon_disc_avoids_faint_outer_halo_pixels() {
+    let normal = icon_rgba_for_state(IconState::Normal);
+
+    for y in 0..36 {
+        for x in 0..36 {
+            let dx = x as f32 - 17.5;
+            let dy = y as f32 - 17.5;
+            let distance = (dx * dx + dy * dy).sqrt();
+            if (14.0..=16.0).contains(&distance) {
+                let alpha = pixel_alpha(&normal, x, y);
+                assert!(
+                    alpha == 0 || alpha >= 64,
+                    "outer edge pixel ({x}, {y}) is too faint: alpha {alpha}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn glyph_shapes_are_knocked_out_of_the_filled_disc() {
     let alert = icon_rgba_for_state(IconState::Alert);
 
