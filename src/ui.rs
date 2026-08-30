@@ -23,9 +23,10 @@ use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_cl
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
     NSAttributedStringNSStringDrawing, NSBezierPath, NSCellImagePosition, NSColor,
-    NSCompositingOperation, NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage,
-    NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab,
-    NSTextTabOptionKey, NSView,
+    NSCompositingOperation, NSFont, NSFontAttributeName, NSFontWeightRegular,
+    NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle,
+    NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab, NSTextTabOptionKey,
+    NSView,
 };
 #[cfg(target_os = "macos")]
 use objc2_foundation::{
@@ -1057,7 +1058,9 @@ fn draw_latency_dot(rect: NSRect, level: LatencyLevel) {
 
 #[cfg(target_os = "macos")]
 fn speed_attributed_title(title: &str, color: &NSColor) -> Retained<NSAttributedString> {
-    let font = NSFont::systemFontOfSize(SPEED_FONT_SIZE);
+    let font = NSFont::monospacedDigitSystemFontOfSize_weight(SPEED_FONT_SIZE, unsafe {
+        NSFontWeightRegular
+    });
     let paragraph = speed_paragraph_style(&font, title);
     let font_obj: &AnyObject = font.as_ref();
     let paragraph_obj: &AnyObject = paragraph.as_ref();
@@ -1085,7 +1088,11 @@ fn speed_paragraph_style(font: &NSFont, title: &str) -> Retained<NSMutableParagr
     let number_width = title_number_width(title, font);
     let gap = font_width(" ", font);
     let number_tab_x = arrow_width + number_width;
-    let unit_tab_x = number_tab_x + gap;
+    let unit_width = ["KB/s", "MB/s", "GB/s"]
+        .into_iter()
+        .map(|unit| font_width(unit, font))
+        .fold(0.0, f64::max);
+    let unit_tab_x = number_tab_x + gap + unit_width;
 
     let options = NSDictionary::<NSTextTabOptionKey, AnyObject>::from_slices(
         &[] as &[&NSString],
@@ -1102,7 +1109,7 @@ fn speed_paragraph_style(font: &NSFont, title: &str) -> Retained<NSMutableParagr
     let unit_tab = unsafe {
         NSTextTab::initWithTextAlignment_location_options(
             NSTextTab::alloc(),
-            NSTextAlignment::Left,
+            NSTextAlignment::Right,
             unit_tab_x,
             &options,
         )
@@ -1143,4 +1150,38 @@ fn font_width(text: &str, font: &NSFont) -> f64 {
         )
     };
     attributed.size().width
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn speed_units_have_equal_rendered_width() {
+        let color = NSColor::labelColor();
+        let kilobytes = speed_attributed_title("↑\t1.0\tKB/s", &color);
+        let megabytes = speed_attributed_title("↑\t1.0\tMB/s", &color);
+        let gigabytes = speed_attributed_title("↑\t1.0\tGB/s", &color);
+
+        let widths = [
+            kilobytes.size().width,
+            megabytes.size().width,
+            gigabytes.size().width,
+        ];
+        let width_range = widths.iter().copied().fold(f64::MIN, f64::max)
+            - widths.iter().copied().fold(f64::MAX, f64::min);
+        assert!(width_range < 0.01, "speed units differ by {width_range}pt");
+    }
+
+    #[test]
+    fn speed_font_keeps_system_letter_proportions() {
+        let color = NSColor::labelColor();
+        let narrow = speed_attributed_title("K", &color).size().width;
+        let wide = speed_attributed_title("M", &color).size().width;
+
+        assert!(
+            wide - narrow > 0.5,
+            "speed letters still look fully monospaced: K={narrow}pt, M={wide}pt"
+        );
+    }
 }
