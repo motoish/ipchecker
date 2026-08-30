@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.8.30-1ec18c9e
+
+### Bug Fixes
+
+- Sharpen custom tray icon rendering by @motoish
+- Align speed units with system font by @motoish
+
 ## 2026.8.26-c9295d4f
 
 ### Bug Fixes
