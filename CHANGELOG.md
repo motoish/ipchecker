@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.8.31-6cf4e226
+
+### Refactor
+
+- Extract coordinators and split ui module from Runtime by @motoish
+
 ## 2026.8.30-1ec18c9e
 
 ### Bug Fixes
