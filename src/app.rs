@@ -10,6 +10,7 @@ use std::{
 use crate::{
     ip_source::{FetchError, IpSource},
     monitor::NotificationDecision,
+    notification::{ActionSink, MacNotifier, Notifier},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -46,6 +47,75 @@ impl NotificationCoordinator {
     pub fn mark_delivered(&mut self, decision: &NotificationDecision) {
         if self.active.as_ref() == Some(decision) {
             self.delivered = true;
+        }
+    }
+}
+
+pub trait NotifierReadySink: Send + 'static {
+    fn send(&self, result: Result<MacNotifier, String>);
+}
+
+#[derive(Default)]
+pub struct NotificationService {
+    state: NotificationCoordinator,
+    notifier: Option<MacNotifier>,
+}
+
+impl NotificationService {
+    pub fn observe(
+        &mut self,
+        decision: Option<NotificationDecision>,
+        muted: bool,
+        is_show_status_icon: bool,
+    ) {
+        self.state.observe(decision, muted, is_show_status_icon);
+    }
+
+    pub fn clear_on_status_icon_hidden(&mut self) {
+        self.state.observe(None, false, false);
+    }
+
+    pub fn bootstrap<S: NotifierReadySink>(&self, sink: S) {
+        if thread::Builder::new()
+            .name("ipchecker-notifier-bootstrap".to_owned())
+            .spawn(move || {
+                let mut notifier = MacNotifier::new();
+                let result = notifier
+                    .authorize()
+                    .map(|()| notifier)
+                    .map_err(|error| error.to_string());
+                sink.send(result);
+            })
+            .is_err()
+        {
+            log::warn!("failed to start notification authorization");
+        }
+    }
+
+    pub fn finish_bootstrap(
+        &mut self,
+        result: Result<MacNotifier, String>,
+        is_show_status_icon: bool,
+    ) {
+        match result {
+            Ok(notifier) => self.notifier = Some(notifier),
+            Err(error) => {
+                self.state.observe(None, false, is_show_status_icon);
+                log::warn!("notification authorization unavailable: {error}");
+            }
+        }
+    }
+
+    pub fn deliver_pending<S: ActionSink>(&mut self, action_sink: S) {
+        let Some(decision) = self.state.pending() else {
+            return;
+        };
+        let Some(notifier) = &mut self.notifier else {
+            return;
+        };
+        match notifier.send(decision.clone(), Box::new(action_sink)) {
+            Ok(()) => self.state.mark_delivered(&decision),
+            Err(error) => log::warn!("failed to send notification: {error}"),
         }
     }
 }

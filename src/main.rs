@@ -6,26 +6,20 @@ mod macos {
     use ipchecker::{
         about::{apply_application_icon, show_about},
         app::{
-            EventSink, EventSinkClosed, NotificationCoordinator, WorkerCommand, WorkerEvent,
-            WorkerHandle,
+            EventSink, EventSinkClosed, NotificationService, NotifierReadySink, WorkerCommand,
+            WorkerEvent, WorkerHandle,
         },
-        config::{Config, ConfigStore},
+        config::{Config, ConfigStore, TrayDisplayField},
         i18n,
         ip_input::prompt_expected_ip,
         ip_source::ReqwestIpSource,
         monitor::{Monitor, MonitorOutcome, MonitorState},
         net_metrics::{NetworkMetricsHandle, NetworkMetricsSampling, NetworkMetricsSink},
         net_speed::NetworkSpeedLabels,
-        notification::{ActionSink, MacNotifier, NotificationAction, Notifier},
+        notification::{ActionSink, MacNotifier, NotificationAction},
         session::Session,
         ui::{FeedbackRestoreGuard, TrayUi, UiCommand, UiModel, install_app_edit_menu},
-        update::{
-            UpdateError, UpdateRelease, UpdateStatus, check_for_updates, download_and_extract,
-            open_releases_page, reveal_in_finder,
-        },
-        update_dialog::{
-            confirm_update_download, show_current_version, show_update_error, show_update_ready,
-        },
+        update_coordinator::{UpdateCoordinator, UpdateCoordinatorEvent, UpdateEventSink},
     };
     use tao::{
         event::{Event, StartCause},
@@ -43,11 +37,7 @@ mod macos {
         NotifierReady(Result<MacNotifier, String>),
         RestoreExpectedTitle(u64),
         NetworkSpeed(NetworkSpeedLabels),
-        UpdateCheckCompleted(Result<UpdateStatus, UpdateError>),
-        UpdateDownloadCompleted {
-            version: String,
-            result: Result<std::path::PathBuf, UpdateError>,
-        },
+        Update(UpdateCoordinatorEvent),
     }
 
     #[derive(Clone)]
@@ -92,6 +82,35 @@ mod macos {
         }
     }
 
+    #[derive(Clone)]
+    struct UpdateEventProxy {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    impl UpdateEventSink for UpdateEventProxy {
+        fn send(&self, event: UpdateCoordinatorEvent) -> Result<(), EventSinkClosed> {
+            self.proxy
+                .send_event(UserEvent::Update(event))
+                .map_err(|_| EventSinkClosed)
+        }
+    }
+
+    struct NotifierReadyProxy {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    impl NotifierReadySink for NotifierReadyProxy {
+        fn send(&self, result: Result<MacNotifier, String>) {
+            if self
+                .proxy
+                .send_event(UserEvent::NotifierReady(result))
+                .is_err()
+            {
+                log::debug!("notifier bootstrap finished after the event loop closed");
+            }
+        }
+    }
+
     struct Runtime {
         proxy: EventLoopProxy<UserEvent>,
         store: Option<ConfigStore>,
@@ -100,15 +119,14 @@ mod macos {
         monitor: Monitor,
         outcome: MonitorOutcome,
         tray_ui: Option<TrayUi>,
-        notifier: Option<MacNotifier>,
-        notification_coordinator: NotificationCoordinator,
+        notifications: NotificationService,
+        updates: UpdateCoordinator,
         worker: Option<WorkerHandle>,
         network_metrics: Option<NetworkMetricsHandle>,
         feedback_restore: FeedbackRestoreGuard,
         /// Retained so Edit key equivalents stay registered for dialogs.
         app_edit_menu: Option<Menu>,
         speed_labels: NetworkSpeedLabels,
-        update_in_progress: bool,
         initialized: bool,
     }
 
@@ -128,14 +146,13 @@ mod macos {
                     notification: None,
                 },
                 tray_ui: None,
-                notifier: None,
-                notification_coordinator: NotificationCoordinator::default(),
+                notifications: NotificationService::default(),
+                updates: UpdateCoordinator::default(),
                 worker: None,
                 network_metrics: None,
                 feedback_restore: FeedbackRestoreGuard::default(),
                 app_edit_menu: None,
                 speed_labels: NetworkSpeedLabels::unknown(),
-                update_in_progress: false,
                 initialized: false,
             }
         }
@@ -159,6 +176,7 @@ mod macos {
                 Err(error) => log::error!("failed to create tray UI: {error}"),
             }
             self.start_network_metrics_sampler();
+            self.sync_update_menu();
 
             match ReqwestIpSource::new() {
                 Ok(source) => {
@@ -172,7 +190,9 @@ mod macos {
                 }
                 Err(error) => log::error!("failed to create public IP source: {error}"),
             }
-            self.start_notifier_bootstrap();
+            self.notifications.bootstrap(NotifierReadyProxy {
+                proxy: self.proxy.clone(),
+            });
         }
 
         fn handle_user_event(&mut self, event: UserEvent, control_flow: &mut ControlFlow) {
@@ -183,7 +203,7 @@ mod macos {
                         self.config.expected_ip,
                         self.session.is_muted(),
                     );
-                    self.notification_coordinator.observe(
+                    self.notifications.observe(
                         outcome.notification.clone(),
                         self.session.is_muted(),
                         self.config.is_show_status_icon,
@@ -224,11 +244,23 @@ mod macos {
                     self.speed_labels = labels;
                     self.apply_network_speed();
                 }
-                UserEvent::UpdateCheckCompleted(result) => {
-                    self.handle_update_check_completed(result);
+                UserEvent::Update(UpdateCoordinatorEvent::CheckCompleted(result)) => {
+                    if let Some(release) = self.updates.handle_check_completed(result) {
+                        let _ = self.updates.start_download(
+                            release,
+                            UpdateEventProxy {
+                                proxy: self.proxy.clone(),
+                            },
+                        );
+                    }
+                    self.sync_update_menu();
                 }
-                UserEvent::UpdateDownloadCompleted { version, result } => {
-                    self.handle_update_download_completed(version, result);
+                UserEvent::Update(UpdateCoordinatorEvent::DownloadCompleted {
+                    version,
+                    result,
+                }) => {
+                    self.updates.handle_download_completed(&version, result);
+                    self.sync_update_menu();
                 }
             }
         }
@@ -242,13 +274,16 @@ mod macos {
                 UiCommand::CheckNow => self.send_worker_command(WorkerCommand::CheckNow),
                 UiCommand::SetMuted(muted) => self.set_muted(muted),
                 UiCommand::SetShowNetworkSpeed(is_show_network_speed) => {
-                    self.set_show_network_speed(is_show_network_speed);
+                    self.set_tray_display(TrayDisplayField::NetworkSpeed, is_show_network_speed);
                 }
                 UiCommand::SetShowNetworkLatency(is_show_network_latency) => {
-                    self.set_show_network_latency(is_show_network_latency);
+                    self.set_tray_display(
+                        TrayDisplayField::NetworkLatency,
+                        is_show_network_latency,
+                    );
                 }
                 UiCommand::SetShowStatusIcon(is_show_status_icon) => {
-                    self.set_show_status_icon(is_show_status_icon);
+                    self.set_tray_display(TrayDisplayField::StatusIcon, is_show_status_icon);
                 }
                 UiCommand::CheckForUpdates => self.start_update_check(),
                 UiCommand::About => show_about(),
@@ -305,7 +340,7 @@ mod macos {
         fn set_muted(&mut self, muted: bool) {
             self.session.set_muted(muted);
             if muted {
-                self.notification_coordinator
+                self.notifications
                     .observe(None, true, self.config.is_show_status_icon);
             }
             self.apply_ui();
@@ -328,153 +363,32 @@ mod macos {
             )));
         }
 
-        fn set_show_network_speed(&mut self, is_show_network_speed: bool) {
-            let mut candidate = self.config.clone();
-            candidate.is_show_network_speed = is_show_network_speed;
-            if !candidate.has_visible_tray_item() {
+        fn set_tray_display(&mut self, field: TrayDisplayField, enabled: bool) {
+            let Some(candidate) = self.config.clone().with_tray_display(field, enabled) else {
                 self.apply_ui();
                 return;
-            }
+            };
             if !self.save_candidate(candidate) {
                 self.apply_ui();
                 return;
             }
-            self.sync_network_metrics_sampling();
-            self.apply_ui();
-        }
-
-        fn set_show_network_latency(&mut self, is_show_network_latency: bool) {
-            let mut candidate = self.config.clone();
-            candidate.is_show_network_latency = is_show_network_latency;
-            if !candidate.has_visible_tray_item() {
-                self.apply_ui();
-                return;
+            if field == TrayDisplayField::StatusIcon && !enabled {
+                self.notifications.clear_on_status_icon_hidden();
             }
-            if !self.save_candidate(candidate) {
-                self.apply_ui();
-                return;
-            }
-            self.sync_network_metrics_sampling();
-            self.apply_ui();
-        }
-
-        fn set_show_status_icon(&mut self, is_show_status_icon: bool) {
-            let mut candidate = self.config.clone();
-            candidate.is_show_status_icon = is_show_status_icon;
-            if !candidate.has_visible_tray_item() {
-                self.apply_ui();
-                return;
-            }
-            if !self.save_candidate(candidate) {
-                self.apply_ui();
-                return;
-            }
-            if !is_show_status_icon {
-                self.notification_coordinator.observe(None, false, false);
+            if matches!(
+                field,
+                TrayDisplayField::NetworkSpeed | TrayDisplayField::NetworkLatency
+            ) {
+                self.sync_network_metrics_sampling();
             }
             self.apply_ui();
         }
 
         fn start_update_check(&mut self) {
-            if self.update_in_progress {
-                return;
-            }
-            self.set_update_in_progress(true);
-
-            let proxy = self.proxy.clone();
-            if let Err(error) = thread::Builder::new()
-                .name("ipchecker-update-check".to_owned())
-                .spawn(move || {
-                    if proxy
-                        .send_event(UserEvent::UpdateCheckCompleted(check_for_updates()))
-                        .is_err()
-                    {
-                        log::debug!("update check finished after the event loop closed");
-                    }
-                })
-            {
-                log::warn!("failed to start update check: {error}");
-                self.set_update_in_progress(false);
-                self.present_update_error();
-            }
-        }
-
-        fn handle_update_check_completed(&mut self, result: Result<UpdateStatus, UpdateError>) {
-            match result {
-                Ok(UpdateStatus::Current) => {
-                    self.set_update_in_progress(false);
-                    show_current_version(env!("CARGO_PKG_VERSION"));
-                }
-                Ok(UpdateStatus::Available(release)) => {
-                    if confirm_update_download(&release.version) {
-                        self.start_update_download(release);
-                    } else {
-                        self.set_update_in_progress(false);
-                    }
-                }
-                Err(error) => {
-                    log::warn!("update check failed: {error}");
-                    self.set_update_in_progress(false);
-                    self.present_update_error();
-                }
-            }
-        }
-
-        fn start_update_download(&mut self, release: UpdateRelease) {
-            let version = release.version.clone();
-            let proxy = self.proxy.clone();
-            if let Err(error) = thread::Builder::new()
-                .name("ipchecker-update-download".to_owned())
-                .spawn(move || {
-                    let result = download_and_extract(&release);
-                    if proxy
-                        .send_event(UserEvent::UpdateDownloadCompleted { version, result })
-                        .is_err()
-                    {
-                        log::debug!("update download finished after the event loop closed");
-                    }
-                })
-            {
-                log::warn!("failed to start update download: {error}");
-                self.set_update_in_progress(false);
-                self.present_update_error();
-            }
-        }
-
-        fn handle_update_download_completed(
-            &mut self,
-            version: String,
-            result: Result<std::path::PathBuf, UpdateError>,
-        ) {
-            self.set_update_in_progress(false);
-            match result {
-                Ok(app) => {
-                    show_update_ready(&version, &app);
-                    if let Err(error) = reveal_in_finder(&app) {
-                        log::warn!("failed to reveal downloaded update: {error}");
-                        self.present_update_error();
-                    }
-                }
-                Err(error) => {
-                    log::warn!("update download failed: {error}");
-                    self.present_update_error();
-                }
-            }
-        }
-
-        fn set_update_in_progress(&mut self, in_progress: bool) {
-            self.update_in_progress = in_progress;
-            if let Some(tray_ui) = &self.tray_ui {
-                tray_ui.set_check_for_updates_enabled(!in_progress);
-            }
-        }
-
-        fn present_update_error(&self) {
-            if show_update_error()
-                && let Err(error) = open_releases_page()
-            {
-                log::warn!("failed to open Releases page: {error}");
-            }
+            let _ = self.updates.start_check(UpdateEventProxy {
+                proxy: self.proxy.clone(),
+            });
+            self.sync_update_menu();
         }
 
         fn save_candidate(&mut self, candidate: Config) -> bool {
@@ -513,65 +427,23 @@ mod macos {
         }
 
         fn recompare_expected_and_check(&mut self) {
-            self.notification_coordinator
+            self.notifications
                 .observe(None, false, self.config.is_show_status_icon);
             self.outcome = self.outcome.recompare_expected(self.config.expected_ip);
             self.apply_ui();
             self.send_worker_command(WorkerCommand::CheckNow);
         }
 
-        fn start_notifier_bootstrap(&self) {
-            let proxy = self.proxy.clone();
-            if let Err(error) = thread::Builder::new()
-                .name("ipchecker-notifier-bootstrap".to_owned())
-                .spawn(move || {
-                    let mut notifier = MacNotifier::new();
-                    let result = notifier
-                        .authorize()
-                        .map(|()| notifier)
-                        .map_err(|error| error.to_string());
-                    if proxy.send_event(UserEvent::NotifierReady(result)).is_err() {
-                        log::debug!("notifier bootstrap finished after the event loop closed");
-                    }
-                })
-            {
-                log::warn!("failed to start notification authorization: {error}");
-            }
-        }
-
         fn finish_notifier_bootstrap(&mut self, result: Result<MacNotifier, String>) {
-            match result {
-                Ok(notifier) => {
-                    self.notifier = Some(notifier);
-                    self.deliver_pending_notification();
-                }
-                Err(error) => {
-                    self.notification_coordinator.observe(
-                        None,
-                        false,
-                        self.config.is_show_status_icon,
-                    );
-                    log::warn!("notification authorization unavailable: {error}");
-                }
-            }
+            self.notifications
+                .finish_bootstrap(result, self.config.is_show_status_icon);
+            self.deliver_pending_notification();
         }
 
         fn deliver_pending_notification(&mut self) {
-            let Some(decision) = self.notification_coordinator.pending() else {
-                return;
-            };
-            let Some(notifier) = &mut self.notifier else {
-                return;
-            };
-            match notifier.send(
-                decision.clone(),
-                Box::new(NotificationActionProxy {
-                    proxy: self.proxy.clone(),
-                }),
-            ) {
-                Ok(()) => self.notification_coordinator.mark_delivered(&decision),
-                Err(error) => log::warn!("failed to send notification: {error}"),
-            }
+            self.notifications.deliver_pending(NotificationActionProxy {
+                proxy: self.proxy.clone(),
+            });
         }
 
         fn send_worker_command(&self, command: WorkerCommand) {
@@ -631,6 +503,13 @@ mod macos {
                 is_show_network_speed: self.config.is_show_network_speed,
                 is_show_network_latency: self.config.is_show_network_latency,
             });
+        }
+
+        fn sync_update_menu(&self) {
+            let Some(tray_ui) = &self.tray_ui else {
+                return;
+            };
+            tray_ui.set_check_for_updates_enabled(!self.updates.in_progress());
         }
 
         fn start_network_metrics_sampler(&mut self) {

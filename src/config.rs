@@ -83,9 +83,25 @@ impl Default for Config {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrayDisplayField {
+    NetworkSpeed,
+    NetworkLatency,
+    StatusIcon,
+}
+
 impl Config {
     pub fn has_visible_tray_item(&self) -> bool {
         self.is_show_network_speed || self.is_show_network_latency || self.is_show_status_icon
+    }
+
+    pub fn with_tray_display(mut self, field: TrayDisplayField, enabled: bool) -> Option<Self> {
+        match field {
+            TrayDisplayField::NetworkSpeed => self.is_show_network_speed = enabled,
+            TrayDisplayField::NetworkLatency => self.is_show_network_latency = enabled,
+            TrayDisplayField::StatusIcon => self.is_show_status_icon = enabled,
+        }
+        self.has_visible_tray_item().then_some(self)
     }
 
     fn normalize_tray_visibility(&mut self) {
