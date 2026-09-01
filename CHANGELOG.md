@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.1-6b406975
+
+### Miscellaneous Tasks
+
+- Add Renovate config for Cargo and GitHub Actions by @motoish
+
 ## 2026.8.31-6cf4e226
 
 ### Refactor
