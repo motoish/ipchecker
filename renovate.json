@@ -1,0 +1,84 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "enabledManagers": ["cargo", "github-actions"],
+  "labels": ["dependencies"],
+  "timezone": "Asia/Tokyo",
+  "schedule": ["after 10am and before 11am on wednesday"],
+  "minimumReleaseAge": "3 days",
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["after 10am and before 11am on wednesday"],
+    "automerge": true,
+    "automergeType": "pr"
+  },
+  "constraints": {
+    "rust": "1.97.1"
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/rust-toolchain\\.toml$/"],
+      "matchStrings": ["channel = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "rust"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Automerge non-major GitHub Actions updates after CI passes",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Review Cargo updates manually (macOS tray UI regressions)",
+      "matchManagers": ["cargo"],
+      "automerge": false
+    },
+    {
+      "description": "Review Rust toolchain updates manually",
+      "matchDepNames": ["rust", "dtolnay/rust-toolchain"],
+      "automerge": false
+    },
+    {
+      "description": "Never automerge the CalVer release action",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["motoish/calver-release-action"],
+      "automerge": false
+    },
+    {
+      "description": "Keep rust-toolchain.toml and CI pins in one PR",
+      "groupName": "rust toolchain",
+      "matchDepNames": ["rust", "dtolnay/rust-toolchain"]
+    },
+    {
+      "description": "Group objc2 crate updates",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["objc2", "objc2-app-kit", "objc2-foundation"],
+      "groupName": "objc2"
+    },
+    {
+      "description": "Group tray stack updates",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["tao", "tray-icon", "muda"],
+      "groupName": "tray dependencies"
+    },
+    {
+      "description": "Group remaining non-major Cargo updates",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "cargo dependencies"
+    },
+    {
+      "description": "Require dashboard approval for major updates",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}
