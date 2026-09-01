@@ -3,6 +3,7 @@ mod macos {
     use std::{net::Ipv4Addr, thread, time::Duration};
 
     use arboard::Clipboard;
+    use chrono::Local;
     use ipchecker::{
         about::{apply_application_icon, show_about},
         app::{
@@ -10,6 +11,10 @@ mod macos {
             WorkerEvent, WorkerHandle,
         },
         config::{Config, ConfigStore, TrayDisplayField},
+        daily_ip_log::{
+            DailyIpLogEvent, DailyIpLogEventSink, DailyIpLogHandle, DailyIpLogWorkerClosed,
+        },
+        daily_ip_log_ui::{choose_daily_ip_log_directory, show_daily_ip_log_error},
         i18n,
         ip_input::prompt_expected_ip,
         ip_source::ReqwestIpSource,
@@ -37,6 +42,7 @@ mod macos {
         NotifierReady(Result<MacNotifier, String>),
         RestoreExpectedTitle(u64),
         NetworkSpeed(NetworkSpeedLabels),
+        DailyIpLog(DailyIpLogEvent),
         Update(UpdateCoordinatorEvent),
     }
 
@@ -83,6 +89,19 @@ mod macos {
     }
 
     #[derive(Clone)]
+    struct DailyIpLogEventProxy {
+        proxy: EventLoopProxy<UserEvent>,
+    }
+
+    impl DailyIpLogEventSink for DailyIpLogEventProxy {
+        fn send(&self, event: DailyIpLogEvent) -> Result<(), DailyIpLogWorkerClosed> {
+            self.proxy
+                .send_event(UserEvent::DailyIpLog(event))
+                .map_err(|_| DailyIpLogWorkerClosed)
+        }
+    }
+
+    #[derive(Clone)]
     struct UpdateEventProxy {
         proxy: EventLoopProxy<UserEvent>,
     }
@@ -123,6 +142,8 @@ mod macos {
         updates: UpdateCoordinator,
         worker: Option<WorkerHandle>,
         network_metrics: Option<NetworkMetricsHandle>,
+        daily_ip_log: Option<DailyIpLogHandle>,
+        daily_ip_log_error_shown: bool,
         feedback_restore: FeedbackRestoreGuard,
         /// Retained so Edit key equivalents stay registered for dialogs.
         app_edit_menu: Option<Menu>,
@@ -150,6 +171,8 @@ mod macos {
                 updates: UpdateCoordinator::default(),
                 worker: None,
                 network_metrics: None,
+                daily_ip_log: None,
+                daily_ip_log_error_shown: false,
                 feedback_restore: FeedbackRestoreGuard::default(),
                 app_edit_menu: None,
                 speed_labels: NetworkSpeedLabels::unknown(),
@@ -176,6 +199,9 @@ mod macos {
                 Err(error) => log::error!("failed to create tray UI: {error}"),
             }
             self.start_network_metrics_sampler();
+            self.daily_ip_log = Some(DailyIpLogHandle::start(DailyIpLogEventProxy {
+                proxy: self.proxy.clone(),
+            }));
             self.sync_update_menu();
 
             match ReqwestIpSource::new() {
@@ -198,6 +224,7 @@ mod macos {
         fn handle_user_event(&mut self, event: UserEvent, control_flow: &mut ControlFlow) {
             match event {
                 UserEvent::Worker(WorkerEvent::FetchCompleted(result)) => {
+                    let successful_ip = result.as_ref().ok().copied();
                     let outcome = self.monitor.apply(
                         result,
                         self.config.expected_ip,
@@ -211,6 +238,9 @@ mod macos {
                     self.outcome = outcome;
                     self.apply_ui();
                     self.deliver_pending_notification();
+                    if let Some(ip) = successful_ip {
+                        self.record_daily_ip(ip);
+                    }
                 }
                 UserEvent::Menu(id) => {
                     let Some(action) = self
@@ -243,6 +273,13 @@ mod macos {
                     }
                     self.speed_labels = labels;
                     self.apply_network_speed();
+                }
+                UserEvent::DailyIpLog(DailyIpLogEvent::Failed(error)) => {
+                    log::warn!("failed to record daily public IP: {error}");
+                    if !self.daily_ip_log_error_shown {
+                        self.daily_ip_log_error_shown = true;
+                        show_daily_ip_log_error();
+                    }
                 }
                 UserEvent::Update(UpdateCoordinatorEvent::CheckCompleted(result)) => {
                     if let Some(release) = self.updates.handle_check_completed(result) {
@@ -284,6 +321,12 @@ mod macos {
                 }
                 UiCommand::SetShowStatusIcon(is_show_status_icon) => {
                     self.set_tray_display(TrayDisplayField::StatusIcon, is_show_status_icon);
+                }
+                UiCommand::SetDailyIpLogEnabled(enabled) => {
+                    self.set_daily_ip_log_enabled(enabled);
+                }
+                UiCommand::ChangeDailyIpLogDirectory => {
+                    self.change_daily_ip_log_directory();
                 }
                 UiCommand::CheckForUpdates => self.start_update_check(),
                 UiCommand::About => show_about(),
@@ -382,6 +425,60 @@ mod macos {
                 self.sync_network_metrics_sampling();
             }
             self.apply_ui();
+        }
+
+        fn set_daily_ip_log_enabled(&mut self, enabled: bool) {
+            if enabled == self.config.is_daily_ip_log_enabled {
+                self.apply_ui();
+                return;
+            }
+
+            let mut candidate = self.config.clone();
+            if enabled && candidate.daily_ip_log_directory.is_none() {
+                let Some(directory) = choose_daily_ip_log_directory() else {
+                    self.apply_ui();
+                    return;
+                };
+                candidate.daily_ip_log_directory = Some(directory);
+            }
+            candidate.is_daily_ip_log_enabled = enabled;
+            if self.save_candidate(candidate) && enabled {
+                self.send_worker_command(WorkerCommand::CheckNow);
+            }
+            self.apply_ui();
+        }
+
+        fn change_daily_ip_log_directory(&mut self) {
+            let Some(directory) = choose_daily_ip_log_directory() else {
+                return;
+            };
+            let mut candidate = self.config.clone();
+            candidate.daily_ip_log_directory = Some(directory);
+            let should_check = candidate.is_daily_ip_log_enabled;
+            if self.save_candidate(candidate) && should_check {
+                self.send_worker_command(WorkerCommand::CheckNow);
+            }
+            self.apply_ui();
+        }
+
+        fn record_daily_ip(&self, ip: Ipv4Addr) {
+            if !self.config.is_daily_ip_log_enabled {
+                return;
+            }
+            let Some(directory) = self.config.daily_ip_log_directory.clone() else {
+                log::warn!("daily public IP log is enabled without an output directory");
+                return;
+            };
+            let Some(worker) = &self.daily_ip_log else {
+                log::warn!("daily public IP log worker is unavailable");
+                return;
+            };
+            if worker
+                .record(directory, Local::now().date_naive(), ip)
+                .is_err()
+            {
+                log::warn!("daily public IP log worker is closed");
+            }
         }
 
         fn start_update_check(&mut self) {

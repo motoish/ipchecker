@@ -6,6 +6,8 @@ menu.check_now: 지금 확인
 menu.show_network_speed: 네트워크 속도 표시
 menu.show_network_latency: 네트워크 지연 표시
 menu.show_status_icon: 상태 아이콘 표시
+menu.daily_ip_log: 일일 공인 IP 기록
+menu.change_daily_ip_log_directory: 로그 출력 폴더 변경…
 menu.mute_session: 이 세션에서 알림 끄기
 menu.check_for_updates: 업데이트 확인…
 menu.about: ipchecker 정보…
@@ -21,6 +23,8 @@ dialog.set_expected_title: 예상 IP 설정
 dialog.save: 저장
 dialog.cancel: 취소
 dialog.invalid_ipv4: 유효한 IPv4 주소를 입력하세요
+dialog.daily_ip_log_error_title: 일일 공인 IP 로그를 저장할 수 없음
+dialog.daily_ip_log_error_body: "일일 공인 IP 로그를 업데이트하지 못했습니다. 기존 파일은 변경되지 않았습니다. 출력 폴더를 확인한 후 다시 시도하세요."
 dialog.about_ok: 확인
 dialog.about_version: "버전 %{version}"
 dialog.about_body: "공인 IPv4를 감시하는 macOS 메뉴 막대 앱."

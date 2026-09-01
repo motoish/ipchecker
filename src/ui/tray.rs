@@ -29,6 +29,8 @@ pub struct TrayUi {
     show_network_speed_item: CheckMenuItem,
     show_network_latency_item: CheckMenuItem,
     show_status_icon_item: CheckMenuItem,
+    daily_ip_log_item: CheckMenuItem,
+    change_daily_ip_log_directory_item: MenuItem,
     mute_item: CheckMenuItem,
     check_for_updates_item: MenuItem,
     about_item: MenuItem,
@@ -82,6 +84,17 @@ impl TrayUi {
             model.is_show_status_icon,
             None,
         );
+        let daily_ip_log_item = CheckMenuItem::new(
+            t!("menu.daily_ip_log").as_ref(),
+            true,
+            model.is_daily_ip_log_enabled,
+            None,
+        );
+        let change_daily_ip_log_directory_item = MenuItem::new(
+            t!("menu.change_daily_ip_log_directory").as_ref(),
+            true,
+            None,
+        );
         let mute_item =
             CheckMenuItem::new(t!("menu.mute_session").as_ref(), true, model.muted, None);
         let check_for_updates_item =
@@ -109,6 +122,8 @@ impl TrayUi {
             &show_network_speed_item,
             &show_network_latency_item,
             &show_status_icon_item,
+            &daily_ip_log_item,
+            &change_daily_ip_log_directory_item,
             &mute_item,
             &separators[3],
             &check_for_updates_item,
@@ -138,6 +153,8 @@ impl TrayUi {
             show_network_speed_item,
             show_network_latency_item,
             show_status_icon_item,
+            daily_ip_log_item,
+            change_daily_ip_log_directory_item,
             mute_item,
             check_for_updates_item,
             about_item,
@@ -178,6 +195,8 @@ impl TrayUi {
             .set_checked(model.is_show_status_icon);
         self.show_status_icon_item
             .set_enabled(model.can_toggle_show_status_icon);
+        self.daily_ip_log_item
+            .set_checked(model.is_daily_ip_log_enabled);
         self.mute_item.set_checked(model.muted);
         self.tray.set_tooltip(Some(&model.tooltip))?;
         self.tray.set_icon_with_as_template(
@@ -241,6 +260,14 @@ impl TrayUi {
         }
         if id == self.show_status_icon_item.id() {
             return Some(MenuAction::ToggleShowStatusIcon);
+        }
+        if id == self.daily_ip_log_item.id() {
+            return Some(MenuAction::SetDailyIpLogEnabled(
+                self.daily_ip_log_item.is_checked(),
+            ));
+        }
+        if id == self.change_daily_ip_log_directory_item.id() {
+            return Some(MenuAction::ChangeDailyIpLogDirectory);
         }
         if id == self.mute_item.id() {
             return Some(MenuAction::ToggleMuted);

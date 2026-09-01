@@ -6,6 +6,8 @@ menu.check_now: Vérifier maintenant
 menu.show_network_speed: Afficher le débit
 menu.show_network_latency: Afficher la latence réseau
 menu.show_status_icon: Afficher l'icône d'état
+menu.daily_ip_log: Enregistrer l’IP publique quotidienne
+menu.change_daily_ip_log_directory: Modifier le dossier de sortie du journal…
 menu.mute_session: Ne plus notifier cette session
 menu.check_for_updates: Rechercher les mises à jour…
 menu.about: À propos d’ipchecker…
@@ -21,6 +23,8 @@ dialog.set_expected_title: Définir l’IP attendue
 dialog.save: Enregistrer
 dialog.cancel: Annuler
 dialog.invalid_ipv4: Veuillez saisir une adresse IPv4 valide
+dialog.daily_ip_log_error_title: Impossible d’enregistrer le journal quotidien des IP
+dialog.daily_ip_log_error_body: "Le journal quotidien des IP publiques n’a pas pu être mis à jour. Le fichier existant n’a pas été modifié. Vérifiez le dossier de sortie et réessayez."
 dialog.about_ok: OK
 dialog.about_version: "Version %{version}"
 dialog.about_body: "Une application de barre de menus macOS qui surveille votre IPv4 publique."

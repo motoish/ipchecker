@@ -35,6 +35,10 @@ struct RawConfig {
     show_network_latency: Option<bool>,
     #[serde(default, deserialize_with = "recover_bool")]
     show_status_icon: Option<bool>,
+    #[serde(default, deserialize_with = "recover_bool")]
+    daily_ip_log_enabled: Option<bool>,
+    #[serde(default, deserialize_with = "recover_path_buf")]
+    daily_ip_log_directory: Option<PathBuf>,
 }
 
 fn recover_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -58,6 +62,16 @@ where
     Ok(Option::<bool>::deserialize(deserializer).ok().flatten())
 }
 
+fn recover_path_buf<'de, D>(deserializer: D) -> Result<Option<PathBuf>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<PathBuf>::deserialize(deserializer)
+        .ok()
+        .flatten()
+        .filter(|path| !path.as_os_str().is_empty()))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,6 +83,10 @@ pub struct Config {
     pub is_show_network_latency: bool,
     #[serde(rename = "show_status_icon")]
     pub is_show_status_icon: bool,
+    #[serde(rename = "daily_ip_log_enabled")]
+    pub is_daily_ip_log_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daily_ip_log_directory: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -79,6 +97,8 @@ impl Default for Config {
             is_show_network_speed: true,
             is_show_network_latency: true,
             is_show_status_icon: true,
+            is_daily_ip_log_enabled: false,
+            daily_ip_log_directory: None,
         }
     }
 }
@@ -117,6 +137,7 @@ impl Config {
             return Self::default();
         };
 
+        let daily_ip_log_directory = raw.daily_ip_log_directory;
         let mut config = Self {
             expected_ip: raw
                 .expected_ip
@@ -128,6 +149,9 @@ impl Config {
             is_show_network_speed: raw.show_network_speed.unwrap_or(true),
             is_show_network_latency: raw.show_network_latency.unwrap_or(true),
             is_show_status_icon: raw.show_status_icon.unwrap_or(true),
+            is_daily_ip_log_enabled: raw.daily_ip_log_enabled.unwrap_or(false)
+                && daily_ip_log_directory.is_some(),
+            daily_ip_log_directory,
         };
         config.normalize_tray_visibility();
         config

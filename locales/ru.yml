@@ -6,6 +6,8 @@ menu.check_now: Проверить сейчас
 menu.show_network_speed: Показывать скорость сети
 menu.show_network_latency: Показывать задержку сети
 menu.show_status_icon: Показывать значок состояния
+menu.daily_ip_log: Записывать ежедневный публичный IP
+menu.change_daily_ip_log_directory: Изменить папку журнала…
 menu.mute_session: Не уведомлять в этой сессии
 menu.check_for_updates: Проверить обновления…
 menu.about: О программе ipchecker…
@@ -21,6 +23,8 @@ dialog.set_expected_title: Задать ожидаемый IP
 dialog.save: Сохранить
 dialog.cancel: Отмена
 dialog.invalid_ipv4: Введите действительный адрес IPv4
+dialog.daily_ip_log_error_title: Не удалось сохранить ежедневный журнал IP
+dialog.daily_ip_log_error_body: "Не удалось обновить ежедневный журнал публичных IP. Существующий файл не изменён. Проверьте папку вывода и повторите попытку."
 dialog.about_ok: OK
 dialog.about_version: "Версия %{version}"
 dialog.about_body: "Приложение в строке меню macOS для мониторинга публичного IPv4."

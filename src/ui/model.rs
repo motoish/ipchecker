@@ -22,6 +22,7 @@ pub struct UiModel {
     pub is_show_network_speed: bool,
     pub is_show_network_latency: bool,
     pub is_show_status_icon: bool,
+    pub is_daily_ip_log_enabled: bool,
     pub can_toggle_show_network_speed: bool,
     pub can_toggle_show_network_latency: bool,
     pub can_toggle_show_status_icon: bool,
@@ -76,6 +77,7 @@ impl UiModel {
             is_show_network_speed: config.is_show_network_speed,
             is_show_network_latency: config.is_show_network_latency,
             is_show_status_icon: config.is_show_status_icon,
+            is_daily_ip_log_enabled: config.is_daily_ip_log_enabled,
             can_toggle_show_network_speed: !config.is_show_network_speed
                 || config.is_show_network_latency
                 || config.is_show_status_icon,
@@ -102,6 +104,8 @@ pub enum MenuAction {
     ToggleShowNetworkSpeed,
     ToggleShowNetworkLatency,
     ToggleShowStatusIcon,
+    SetDailyIpLogEnabled(bool),
+    ChangeDailyIpLogDirectory,
     CheckForUpdates,
     About,
     Quit,
@@ -118,6 +122,8 @@ pub enum UiCommand {
     SetShowNetworkSpeed(bool),
     SetShowNetworkLatency(bool),
     SetShowStatusIcon(bool),
+    SetDailyIpLogEnabled(bool),
+    ChangeDailyIpLogDirectory,
     CheckForUpdates,
     About,
     Quit,
@@ -143,6 +149,8 @@ impl UiCommand {
                 Self::SetShowNetworkLatency(!is_show_network_latency)
             }
             MenuAction::ToggleShowStatusIcon => Self::SetShowStatusIcon(!is_show_status_icon),
+            MenuAction::SetDailyIpLogEnabled(enabled) => Self::SetDailyIpLogEnabled(enabled),
+            MenuAction::ChangeDailyIpLogDirectory => Self::ChangeDailyIpLogDirectory,
             MenuAction::CheckForUpdates => Self::CheckForUpdates,
             MenuAction::About => Self::About,
             MenuAction::Quit => Self::Quit,

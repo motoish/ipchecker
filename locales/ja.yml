@@ -6,6 +6,8 @@ menu.check_now: 今すぐ確認
 menu.show_network_speed: 通信速度を表示
 menu.show_network_latency: ネットワーク遅延を表示
 menu.show_status_icon: ステータスアイコンを表示
+menu.daily_ip_log: 毎日のグローバル IP を記録
+menu.change_daily_ip_log_directory: ログの出力フォルダを変更…
 menu.mute_session: このセッションでは通知しない
 menu.check_for_updates: アップデートを確認…
 menu.about: ipcheckerについて…
@@ -21,6 +23,8 @@ dialog.set_expected_title: 期待IPを設定
 dialog.save: 保存
 dialog.cancel: キャンセル
 dialog.invalid_ipv4: 有効なIPv4アドレスを入力してください
+dialog.daily_ip_log_error_title: 毎日のグローバル IP ログを保存できません
+dialog.daily_ip_log_error_body: "毎日のグローバル IP ログを更新できませんでした。既存のファイルは変更されていません。出力フォルダを確認して、もう一度お試しください。"
 dialog.about_ok: OK
 dialog.about_version: "バージョン %{version}"
 dialog.about_body: "グローバルIPv4を監視するmacOSメニューバーアプリ。"

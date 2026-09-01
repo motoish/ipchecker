@@ -6,6 +6,8 @@ menu.check_now: Check Now
 menu.show_network_speed: Show Network Speed
 menu.show_network_latency: Show Network Latency
 menu.show_status_icon: Show Status Icon
+menu.daily_ip_log: Record Daily Public IP Log
+menu.change_daily_ip_log_directory: Change Log Output Folder…
 menu.mute_session: Mute for This Session
 menu.check_for_updates: Check for Updates…
 menu.about: About ipchecker…
@@ -21,6 +23,8 @@ dialog.set_expected_title: Set Expected IP
 dialog.save: Save
 dialog.cancel: Cancel
 dialog.invalid_ipv4: Please enter a valid IPv4 address
+dialog.daily_ip_log_error_title: Unable to Save Daily IP Log
+dialog.daily_ip_log_error_body: "The daily public IP log could not be updated. The existing file was left unchanged. Check the output folder and try again."
 dialog.about_ok: OK
 dialog.about_version: "Version %{version}"
 dialog.about_body: "A macOS menu bar app that watches your public IPv4."

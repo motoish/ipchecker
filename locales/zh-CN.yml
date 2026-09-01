@@ -6,6 +6,8 @@ menu.check_now: 立即检查
 menu.show_network_speed: 显示上下行速度
 menu.show_network_latency: 显示网络延迟
 menu.show_status_icon: 显示状态图标
+menu.daily_ip_log: 记录每日公网 IP
+menu.change_daily_ip_log_directory: 更改日志输出文件夹…
 menu.mute_session: 本会话不再提醒
 menu.check_for_updates: 检查更新…
 menu.about: 关于 ipchecker…
@@ -21,6 +23,8 @@ dialog.set_expected_title: 设置期望 IP
 dialog.save: 保存
 dialog.cancel: 取消
 dialog.invalid_ipv4: 请输入有效的 IPv4 地址
+dialog.daily_ip_log_error_title: 无法保存每日公网 IP 日志
+dialog.daily_ip_log_error_body: "无法更新每日公网 IP 日志。现有文件未被修改。请检查输出文件夹后重试。"
 dialog.about_ok: 好
 dialog.about_version: "版本 %{version}"
 dialog.about_body: "监控公网 IPv4 的 macOS 菜单栏应用。"

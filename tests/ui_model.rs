@@ -26,6 +26,8 @@ fn model_for(
         is_show_network_speed: true,
         is_show_network_latency: true,
         is_show_status_icon: true,
+        is_daily_ip_log_enabled: false,
+        daily_ip_log_directory: None,
     };
     let mut session = Session::new();
     session.set_muted(muted);
@@ -207,6 +209,14 @@ fn stateless_menu_actions_map_to_their_matching_commands() {
         (MenuAction::UseCurrentIp, UiCommand::UseCurrentIp),
         (MenuAction::CopyCurrentIp, UiCommand::CopyCurrentIp),
         (MenuAction::CheckNow, UiCommand::CheckNow),
+        (
+            MenuAction::SetDailyIpLogEnabled(true),
+            UiCommand::SetDailyIpLogEnabled(true),
+        ),
+        (
+            MenuAction::ChangeDailyIpLogDirectory,
+            UiCommand::ChangeDailyIpLogDirectory,
+        ),
         (MenuAction::CheckForUpdates, UiCommand::CheckForUpdates),
         (MenuAction::About, UiCommand::About),
         (MenuAction::Quit, UiCommand::Quit),
@@ -216,6 +226,26 @@ fn stateless_menu_actions_map_to_their_matching_commands() {
             expected
         );
     }
+}
+
+#[test]
+fn ui_model_exposes_daily_ip_log_state_from_config() {
+    let config = Config {
+        is_daily_ip_log_enabled: true,
+        daily_ip_log_directory: Some(std::path::PathBuf::from("/tmp/ipchecker-logs")),
+        ..Config::default()
+    };
+    let session = Session::new();
+    let outcome = MonitorOutcome {
+        state: MonitorState::Unknown,
+        current_ip: None,
+        last_success_ip: None,
+        notification: None,
+    };
+
+    let model = UiModel::from_state(&config, &session, &outcome);
+
+    assert!(model.is_daily_ip_log_enabled);
 }
 
 #[test]
@@ -286,6 +316,8 @@ fn ui_model_exposes_show_network_speed_from_config() {
         is_show_network_speed: false,
         is_show_network_latency: true,
         is_show_status_icon: true,
+        is_daily_ip_log_enabled: false,
+        daily_ip_log_directory: None,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -308,6 +340,8 @@ fn ui_model_exposes_show_network_latency_from_config() {
         is_show_network_speed: true,
         is_show_network_latency: false,
         is_show_status_icon: true,
+        is_daily_ip_log_enabled: false,
+        daily_ip_log_directory: None,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -330,6 +364,8 @@ fn ui_model_exposes_show_status_icon_from_config() {
         is_show_network_speed: true,
         is_show_network_latency: true,
         is_show_status_icon: false,
+        is_daily_ip_log_enabled: false,
+        daily_ip_log_directory: None,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -352,6 +388,8 @@ fn ui_model_disables_unchecking_the_last_visible_tray_item() {
         is_show_network_speed: true,
         is_show_network_latency: false,
         is_show_status_icon: false,
+        is_daily_ip_log_enabled: false,
+        daily_ip_log_directory: None,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {

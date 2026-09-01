@@ -6,6 +6,8 @@ rust_i18n::i18n!("locales", fallback = "en");
 pub mod about;
 pub mod app;
 pub mod config;
+pub mod daily_ip_log;
+pub mod daily_ip_log_ui;
 pub mod i18n;
 pub mod ip_input;
 pub mod ip_source;

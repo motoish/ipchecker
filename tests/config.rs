@@ -9,6 +9,29 @@ fn defaults_to_five_minutes_without_expected_ip() {
     assert!(Config::default().is_show_network_speed);
     assert!(Config::default().is_show_network_latency);
     assert!(Config::default().is_show_status_icon);
+    assert!(!Config::default().is_daily_ip_log_enabled);
+    assert_eq!(Config::default().daily_ip_log_directory, None);
+}
+
+#[test]
+fn enabled_daily_ip_log_without_a_directory_recovers_to_disabled() {
+    let config = Config::from_toml("daily_ip_log_enabled = true\n");
+
+    assert!(!config.is_daily_ip_log_enabled);
+    assert_eq!(config.daily_ip_log_directory, None);
+}
+
+#[test]
+fn disabled_daily_ip_log_preserves_its_saved_directory() {
+    let config = Config::from_toml(
+        "daily_ip_log_enabled = false\ndaily_ip_log_directory = \"/tmp/ipchecker-logs\"\n",
+    );
+
+    assert!(!config.is_daily_ip_log_enabled);
+    assert_eq!(
+        config.daily_ip_log_directory,
+        Some(std::path::PathBuf::from("/tmp/ipchecker-logs"))
+    );
 }
 
 #[test]
@@ -94,6 +117,8 @@ fn valid_toml_round_trips() {
         is_show_network_speed: false,
         is_show_network_latency: true,
         is_show_status_icon: true,
+        is_daily_ip_log_enabled: true,
+        daily_ip_log_directory: Some(std::path::PathBuf::from("/tmp/ipchecker-logs")),
     };
     assert_eq!(Config::from_toml(&expected.to_toml().unwrap()), expected);
 }
@@ -124,6 +149,8 @@ fn save_overwrites_existing_configuration() {
         is_show_network_speed: true,
         is_show_network_latency: true,
         is_show_status_icon: true,
+        is_daily_ip_log_enabled: false,
+        daily_ip_log_directory: None,
     };
     let replacement = Config {
         expected_ip: Some(Ipv4Addr::from_str("203.0.113.8").unwrap()),
@@ -131,6 +158,8 @@ fn save_overwrites_existing_configuration() {
         is_show_network_speed: false,
         is_show_network_latency: false,
         is_show_status_icon: true,
+        is_daily_ip_log_enabled: true,
+        daily_ip_log_directory: Some(dir.path().join("logs")),
     };
 
     store.save(&initial).unwrap();

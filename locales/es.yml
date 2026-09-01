@@ -6,6 +6,8 @@ menu.check_now: Comprobar ahora
 menu.show_network_speed: Mostrar velocidad de red
 menu.show_network_latency: Mostrar latencia de red
 menu.show_status_icon: Mostrar icono de estado
+menu.daily_ip_log: Registrar la IP pública diaria
+menu.change_daily_ip_log_directory: Cambiar carpeta de salida del registro…
 menu.mute_session: No notificar en esta sesión
 menu.check_for_updates: Buscar actualizaciones…
 menu.about: Acerca de ipchecker…
@@ -21,6 +23,8 @@ dialog.set_expected_title: Establecer IP esperada
 dialog.save: Guardar
 dialog.cancel: Cancelar
 dialog.invalid_ipv4: Introduce una dirección IPv4 válida
+dialog.daily_ip_log_error_title: No se puede guardar el registro diario de IP
+dialog.daily_ip_log_error_body: "No se pudo actualizar el registro diario de IP públicas. El archivo existente no se modificó. Comprueba la carpeta de salida e inténtalo de nuevo."
 dialog.about_ok: OK
 dialog.about_version: "Versión %{version}"
 dialog.about_body: "Una app de la barra de menús de macOS que vigila tu IPv4 pública."
