@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026.9.2-52ef6923
+
+### Documentation
+
+- Clarify daily IP log check behavior by @motoish
+
+### Features
+
+- Add daily public IP CSV logging by @motoish
+- Add VPN filtering to daily IP logs by @motoish
+
 ## 2026.9.1-6b406975
 
 ### Miscellaneous Tasks
