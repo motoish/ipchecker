@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.3-46613ec7
+
+### Styling
+
+- *(pages)* Tighten spacing and typography for a denser layout by @motoish
+
 ## 2026.9.3-f09b4e8f
 
 ### Features
