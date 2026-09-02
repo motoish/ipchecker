@@ -49,7 +49,7 @@ Configuration is stored at:
 
 The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon` (all default `true`). At least one of the three must remain enabled so the menu bar entry stays accessible. Hiding the status icon also disables all public-IP check notifications, including mismatch and fetch-failure notifications.
 
-Daily IP logging is off by default. When enabled, choose an output folder and ipchecker creates `ipchecker-daily-global-ip-log-YYYY-MM.csv`. Each date has one row; multiple addresses observed on the same day are separated with `;`. **Record VPN Addresses** defaults to on. Turn it off to skip future observations while an active VPN tunnel carries IPv4 routes; existing CSV entries are never changed.
+Daily IP logging is off by default. When enabled, choose an output folder and ipchecker creates `ipchecker-daily-global-ip-log-YYYY-MM.csv`. Enabling the log, or changing its output folder while enabled, triggers an immediate public IP check. Each date has one row; multiple addresses observed on the same day are separated with `;`. **Record VPN Addresses** defaults to on. Turn it off to skip future observations while an active VPN tunnel carries IPv4 routes; existing CSV entries are never changed.
 
 ## Development
 
