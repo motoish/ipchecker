@@ -161,8 +161,10 @@ fn headings_and_sections_use_the_compact_scale() {
     assert!(css_rule(&css, "h1 {").contains("font-size: clamp(42px, 5vw, 58px);"));
     assert!(css_rule(&css, ".section h2 {").contains("font-size: clamp(28px, 3.5vw, 40px);"));
     assert!(css_rule(&css, ".hero {").contains("min-height: 0;"));
-    assert!(css_rule(&css, ".section {").contains("padding: 56px 0;"));
+    assert!(css_rule(&css, ".section {").contains("padding: 56px var(--content-gutter);"));
     assert!(css_rule(&css, ".section-heading {").contains("margin-bottom: 22px;"));
+    assert!(css.contains("--content-gutter: max(20px, calc((100vw - var(--content-width)) / 2));"));
+    assert!(!css.contains("7vw"));
 }
 
 #[test]
