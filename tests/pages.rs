@@ -158,11 +158,11 @@ fn headings_and_sections_use_the_compact_scale() {
     let css = fs::read_to_string(page_root().join("styles.css"))
         .expect("docs/pages/styles.css should define the site appearance");
 
-    assert!(css_rule(&css, "h1 {").contains("font-size: clamp(48px, 5.5vw, 68px);"));
-    assert!(css_rule(&css, ".section h2 {").contains("font-size: clamp(32px, 4vw, 48px);"));
-    assert!(css_rule(&css, ".hero {").contains("min-height: 800px;"));
-    assert!(css_rule(&css, ".section {").contains("padding: 90px 0;"));
-    assert!(css_rule(&css, ".section-heading {").contains("margin-bottom: 34px;"));
+    assert!(css_rule(&css, "h1 {").contains("font-size: clamp(42px, 5vw, 58px);"));
+    assert!(css_rule(&css, ".section h2 {").contains("font-size: clamp(28px, 3.5vw, 40px);"));
+    assert!(css_rule(&css, ".hero {").contains("min-height: 0;"));
+    assert!(css_rule(&css, ".section {").contains("padding: 56px 0;"));
+    assert!(css_rule(&css, ".section-heading {").contains("margin-bottom: 22px;"));
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn feature_cards_use_a_compact_content_driven_layout() {
     assert!(
         feature_card_rules
             .iter()
-            .any(|rule| rule.contains("padding: 22px;"))
+            .any(|rule| rule.contains("padding: 16px;"))
     );
     assert!(
         feature_card_rules
