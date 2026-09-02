@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.9.3-f09b4e8f
+
+### Features
+
+- Add GitHub Pages website by @motoish
+
+### Miscellaneous Tasks
+
+- Update uses clause by @motoish
+
 ## 2026.9.2-f5268763
 
 ### Bug Fixes
