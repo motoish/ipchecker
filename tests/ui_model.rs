@@ -28,6 +28,7 @@ fn model_for(
         is_show_status_icon: true,
         is_daily_ip_log_enabled: false,
         daily_ip_log_directory: None,
+        include_vpn_addresses_in_daily_ip_log: true,
     };
     let mut session = Session::new();
     session.set_muted(muted);
@@ -249,6 +250,39 @@ fn ui_model_exposes_daily_ip_log_state_from_config() {
 }
 
 #[test]
+fn ui_model_exposes_vpn_log_preference_from_config() {
+    let config = Config {
+        include_vpn_addresses_in_daily_ip_log: false,
+        ..Config::default()
+    };
+    let session = Session::new();
+    let outcome = MonitorOutcome {
+        state: MonitorState::Unknown,
+        current_ip: None,
+        last_success_ip: None,
+        notification: None,
+    };
+
+    let model = UiModel::from_state(&config, &session, &outcome);
+
+    assert!(!model.include_vpn_addresses_in_daily_ip_log);
+}
+
+#[test]
+fn vpn_log_menu_action_preserves_the_checked_state() {
+    assert_eq!(
+        UiCommand::from_menu_action(
+            MenuAction::SetIncludeVpnAddressesInDailyIpLog(false),
+            false,
+            true,
+            true,
+            true,
+        ),
+        UiCommand::SetIncludeVpnAddressesInDailyIpLog(false)
+    );
+}
+
+#[test]
 fn mute_menu_action_inverts_only_the_current_session_choice() {
     assert_eq!(
         UiCommand::from_menu_action(MenuAction::ToggleMuted, false, true, true, true),
@@ -318,6 +352,7 @@ fn ui_model_exposes_show_network_speed_from_config() {
         is_show_status_icon: true,
         is_daily_ip_log_enabled: false,
         daily_ip_log_directory: None,
+        include_vpn_addresses_in_daily_ip_log: true,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -342,6 +377,7 @@ fn ui_model_exposes_show_network_latency_from_config() {
         is_show_status_icon: true,
         is_daily_ip_log_enabled: false,
         daily_ip_log_directory: None,
+        include_vpn_addresses_in_daily_ip_log: true,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -366,6 +402,7 @@ fn ui_model_exposes_show_status_icon_from_config() {
         is_show_status_icon: false,
         is_daily_ip_log_enabled: false,
         daily_ip_log_directory: None,
+        include_vpn_addresses_in_daily_ip_log: true,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {
@@ -390,6 +427,7 @@ fn ui_model_disables_unchecking_the_last_visible_tray_item() {
         is_show_status_icon: false,
         is_daily_ip_log_enabled: false,
         daily_ip_log_directory: None,
+        include_vpn_addresses_in_daily_ip_log: true,
     };
     let session = Session::new();
     let outcome = MonitorOutcome {

@@ -39,6 +39,8 @@ struct RawConfig {
     daily_ip_log_enabled: Option<bool>,
     #[serde(default, deserialize_with = "recover_path_buf")]
     daily_ip_log_directory: Option<PathBuf>,
+    #[serde(default, deserialize_with = "recover_bool")]
+    daily_ip_log_include_vpn_addresses: Option<bool>,
 }
 
 fn recover_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -87,6 +89,8 @@ pub struct Config {
     pub is_daily_ip_log_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub daily_ip_log_directory: Option<PathBuf>,
+    #[serde(rename = "daily_ip_log_include_vpn_addresses")]
+    pub include_vpn_addresses_in_daily_ip_log: bool,
 }
 
 impl Default for Config {
@@ -99,6 +103,7 @@ impl Default for Config {
             is_show_status_icon: true,
             is_daily_ip_log_enabled: false,
             daily_ip_log_directory: None,
+            include_vpn_addresses_in_daily_ip_log: true,
         }
     }
 }
@@ -152,6 +157,9 @@ impl Config {
             is_daily_ip_log_enabled: raw.daily_ip_log_enabled.unwrap_or(false)
                 && daily_ip_log_directory.is_some(),
             daily_ip_log_directory,
+            include_vpn_addresses_in_daily_ip_log: raw
+                .daily_ip_log_include_vpn_addresses
+                .unwrap_or(true),
         };
         config.normalize_tray_visibility();
         config

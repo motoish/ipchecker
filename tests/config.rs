@@ -11,6 +11,7 @@ fn defaults_to_five_minutes_without_expected_ip() {
     assert!(Config::default().is_show_status_icon);
     assert!(!Config::default().is_daily_ip_log_enabled);
     assert_eq!(Config::default().daily_ip_log_directory, None);
+    assert!(Config::default().include_vpn_addresses_in_daily_ip_log);
 }
 
 #[test]
@@ -32,6 +33,22 @@ fn disabled_daily_ip_log_preserves_its_saved_directory() {
         config.daily_ip_log_directory,
         Some(std::path::PathBuf::from("/tmp/ipchecker-logs"))
     );
+}
+
+#[test]
+fn missing_or_invalid_vpn_log_preference_recovers_to_enabled() {
+    assert!(Config::from_toml("").include_vpn_addresses_in_daily_ip_log);
+    assert!(
+        Config::from_toml("daily_ip_log_include_vpn_addresses = \"nope\"\n")
+            .include_vpn_addresses_in_daily_ip_log
+    );
+}
+
+#[test]
+fn vpn_log_preference_can_be_disabled() {
+    let config = Config::from_toml("daily_ip_log_include_vpn_addresses = false\n");
+
+    assert!(!config.include_vpn_addresses_in_daily_ip_log);
 }
 
 #[test]
@@ -119,6 +136,7 @@ fn valid_toml_round_trips() {
         is_show_status_icon: true,
         is_daily_ip_log_enabled: true,
         daily_ip_log_directory: Some(std::path::PathBuf::from("/tmp/ipchecker-logs")),
+        include_vpn_addresses_in_daily_ip_log: false,
     };
     assert_eq!(Config::from_toml(&expected.to_toml().unwrap()), expected);
 }
@@ -151,6 +169,7 @@ fn save_overwrites_existing_configuration() {
         is_show_status_icon: true,
         is_daily_ip_log_enabled: false,
         daily_ip_log_directory: None,
+        include_vpn_addresses_in_daily_ip_log: true,
     };
     let replacement = Config {
         expected_ip: Some(Ipv4Addr::from_str("203.0.113.8").unwrap()),
@@ -160,6 +179,7 @@ fn save_overwrites_existing_configuration() {
         is_show_status_icon: true,
         is_daily_ip_log_enabled: true,
         daily_ip_log_directory: Some(dir.path().join("logs")),
+        include_vpn_addresses_in_daily_ip_log: false,
     };
 
     store.save(&initial).unwrap();

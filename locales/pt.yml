@@ -7,6 +7,7 @@ menu.show_network_speed: Mostrar velocidade da rede
 menu.show_network_latency: Mostrar latência da rede
 menu.show_status_icon: Mostrar ícone de status
 menu.daily_ip_log: Registar o IP público diário
+menu.daily_ip_log_include_vpn_addresses: Registar endereços VPN
 menu.change_daily_ip_log_directory: Alterar pasta de saída do registo…
 menu.mute_session: Não notificar nesta sessão
 menu.check_for_updates: Procurar atualizações…

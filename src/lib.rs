@@ -21,3 +21,4 @@ pub mod ui;
 pub mod update;
 pub mod update_coordinator;
 pub mod update_dialog;
+pub mod vpn_detection;

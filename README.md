@@ -11,6 +11,7 @@
 - Three fallback sources for reliable public IPv4 checks
 - Expected-IP comparison and mismatch notifications
 - 1, 5, 15, 30, or 60-minute check intervals
+- Optional monthly CSV log of daily public IP addresses
 - Session-only mute without hiding the warning state
 - Built-in update check with verified download and Finder handoff
 
@@ -35,6 +36,8 @@ Open the menu bar icon to:
 - use the current IP as the expected address
 - change the check interval or check immediately
 - show or hide live upload/download rates
+- record daily public IP addresses and choose the log output folder
+- include or exclude VPN addresses from future log entries
 - mute notifications for the current session
 - check for updates, download and verify the latest app, then reveal it in Finder for manual replacement
 
@@ -45,6 +48,8 @@ Configuration is stored at:
 ```
 
 The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon` (all default `true`). At least one of the three must remain enabled so the menu bar entry stays accessible. Hiding the status icon also disables all public-IP check notifications, including mismatch and fetch-failure notifications.
+
+Daily IP logging is off by default. When enabled, choose an output folder and ipchecker creates `ipchecker-daily-global-ip-log-YYYY-MM.csv`. Each date has one row; multiple addresses observed on the same day are separated with `;`. **Record VPN Addresses** defaults to on. Turn it off to skip future observations while an active VPN tunnel carries IPv4 routes; existing CSV entries are never changed.
 
 ## Development
 

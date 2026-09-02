@@ -7,6 +7,7 @@ menu.show_network_speed: 显示上下行速度
 menu.show_network_latency: 显示网络延迟
 menu.show_status_icon: 显示状态图标
 menu.daily_ip_log: 记录每日公网 IP
+menu.daily_ip_log_include_vpn_addresses: 记录 VPN 地址
 menu.change_daily_ip_log_directory: 更改日志输出文件夹…
 menu.mute_session: 本会话不再提醒
 menu.check_for_updates: 检查更新…

@@ -25,6 +25,7 @@ mod macos {
         session::Session,
         ui::{FeedbackRestoreGuard, TrayUi, UiCommand, UiModel, install_app_edit_menu},
         update_coordinator::{UpdateCoordinator, UpdateCoordinatorEvent, UpdateEventSink},
+        vpn_detection::{DailyIpRecordDecision, decide_daily_ip_recording, detect_vpn_status},
     };
     use tao::{
         event::{Event, StartCause},
@@ -325,6 +326,9 @@ mod macos {
                 UiCommand::SetDailyIpLogEnabled(enabled) => {
                     self.set_daily_ip_log_enabled(enabled);
                 }
+                UiCommand::SetIncludeVpnAddressesInDailyIpLog(enabled) => {
+                    self.set_include_vpn_addresses_in_daily_ip_log(enabled);
+                }
                 UiCommand::ChangeDailyIpLogDirectory => {
                     self.change_daily_ip_log_directory();
                 }
@@ -461,9 +465,40 @@ mod macos {
             self.apply_ui();
         }
 
+        fn set_include_vpn_addresses_in_daily_ip_log(&mut self, enabled: bool) {
+            if enabled == self.config.include_vpn_addresses_in_daily_ip_log {
+                self.apply_ui();
+                return;
+            }
+
+            let mut candidate = self.config.clone();
+            candidate.include_vpn_addresses_in_daily_ip_log = enabled;
+            self.save_candidate(candidate);
+            self.apply_ui();
+        }
+
         fn record_daily_ip(&self, ip: Ipv4Addr) {
             if !self.config.is_daily_ip_log_enabled {
                 return;
+            }
+            let decision = decide_daily_ip_recording(
+                self.config.include_vpn_addresses_in_daily_ip_log,
+                || {
+                    detect_vpn_status().map_err(|error| {
+                        log::warn!(
+                            "failed to detect VPN state; skipped daily public IP log entry: {error}"
+                        );
+                        error
+                    })
+                },
+            );
+            match decision {
+                DailyIpRecordDecision::Record => {}
+                DailyIpRecordDecision::SkipVpn => {
+                    log::debug!("skipped daily public IP log entry while VPN is active");
+                    return;
+                }
+                DailyIpRecordDecision::SkipDetectionFailed => return,
             }
             let Some(directory) = self.config.daily_ip_log_directory.clone() else {
                 log::warn!("daily public IP log is enabled without an output directory");

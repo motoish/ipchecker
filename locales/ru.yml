@@ -7,6 +7,7 @@ menu.show_network_speed: Показывать скорость сети
 menu.show_network_latency: Показывать задержку сети
 menu.show_status_icon: Показывать значок состояния
 menu.daily_ip_log: Записывать ежедневный публичный IP
+menu.daily_ip_log_include_vpn_addresses: Записывать VPN-адреса
 menu.change_daily_ip_log_directory: Изменить папку журнала…
 menu.mute_session: Не уведомлять в этой сессии
 menu.check_for_updates: Проверить обновления…

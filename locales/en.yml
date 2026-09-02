@@ -7,6 +7,7 @@ menu.show_network_speed: Show Network Speed
 menu.show_network_latency: Show Network Latency
 menu.show_status_icon: Show Status Icon
 menu.daily_ip_log: Record Daily Public IP Log
+menu.daily_ip_log_include_vpn_addresses: Record VPN Addresses
 menu.change_daily_ip_log_directory: Change Log Output Folder…
 menu.mute_session: Mute for This Session
 menu.check_for_updates: Check for Updates…
