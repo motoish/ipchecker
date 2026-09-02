@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.2-f5268763
+
+### Bug Fixes
+
+- Allow creating folders from the log directory picker by @motoish
+
 ## 2026.9.2-52ef6923
 
 ### Documentation
