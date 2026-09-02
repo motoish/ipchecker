@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.3-240f4359
+
+### Styling
+
+- *(pages)* Tighten layout and align section headings by @motoish
+
 ## 2026.9.3-46613ec7
 
 ### Styling
