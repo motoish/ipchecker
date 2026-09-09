@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.9.9-469a783d
+
+### Miscellaneous Tasks
+
+- *(renovate)* Disable standalone lock file maintenance by @motoish
+- *(renovate)* Disable patch match update type by @motoish
+
 ## 2026.9.9-345215c9
 
 ### Bug Fixes
