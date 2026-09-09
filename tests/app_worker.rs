@@ -84,7 +84,7 @@ fn startup_performs_one_immediate_check() {
 
     assert!(matches!(
         events.recv_timeout(Duration::from_millis(250)).unwrap(),
-        WorkerEvent::FetchCompleted(Ok(current)) if current == ip("192.0.2.1")
+        WorkerEvent::FetchCompleted { result: Ok(current), .. } if current == ip("192.0.2.1")
     ));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
@@ -104,7 +104,7 @@ fn check_now_uses_the_same_fetch_path() {
 
     assert!(matches!(
         events.recv_timeout(Duration::from_millis(250)).unwrap(),
-        WorkerEvent::FetchCompleted(Ok(current)) if current == ip("192.0.2.1")
+        WorkerEvent::FetchCompleted { result: Ok(current), .. } if current == ip("192.0.2.1")
     ));
     assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
@@ -126,7 +126,7 @@ fn interval_change_triggers_an_immediate_check() {
 
     assert!(matches!(
         events.recv_timeout(Duration::from_millis(250)).unwrap(),
-        WorkerEvent::FetchCompleted(Ok(current)) if current == ip("192.0.2.1")
+        WorkerEvent::FetchCompleted { result: Ok(current), .. } if current == ip("192.0.2.1")
     ));
     assert_eq!(calls.load(Ordering::SeqCst), 2);
 }

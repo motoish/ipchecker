@@ -25,7 +25,7 @@ mod macos {
         session::Session,
         ui::{FeedbackRestoreGuard, TrayUi, UiCommand, UiModel, install_app_edit_menu},
         update_coordinator::{UpdateCoordinator, UpdateCoordinatorEvent, UpdateEventSink},
-        vpn_detection::{DailyIpRecordDecision, decide_daily_ip_recording, detect_vpn_status},
+        vpn_detection::{DailyIpRecordDecision, VpnStatus, decide_daily_ip_recording},
     };
     use tao::{
         event::{Event, StartCause},
@@ -224,7 +224,7 @@ mod macos {
 
         fn handle_user_event(&mut self, event: UserEvent, control_flow: &mut ControlFlow) {
             match event {
-                UserEvent::Worker(WorkerEvent::FetchCompleted(result)) => {
+                UserEvent::Worker(WorkerEvent::FetchCompleted { result, vpn_status }) => {
                     let successful_ip = result.as_ref().ok().copied();
                     let outcome = self.monitor.apply(
                         result,
@@ -240,7 +240,7 @@ mod macos {
                     self.apply_ui();
                     self.deliver_pending_notification();
                     if let Some(ip) = successful_ip {
-                        self.record_daily_ip(ip);
+                        self.record_daily_ip(ip, vpn_status);
                     }
                 }
                 UserEvent::Menu(id) => {
@@ -422,6 +422,10 @@ mod macos {
             if field == TrayDisplayField::StatusIcon && !enabled {
                 self.notifications.clear_on_status_icon_hidden();
             }
+            if field == TrayDisplayField::NetworkSpeed {
+                self.speed_labels =
+                    NetworkSpeedLabels::unknown().with_latency(self.speed_labels.latency.clone());
+            }
             if matches!(
                 field,
                 TrayDisplayField::NetworkSpeed | TrayDisplayField::NetworkLatency
@@ -477,14 +481,14 @@ mod macos {
             self.apply_ui();
         }
 
-        fn record_daily_ip(&self, ip: Ipv4Addr) {
+        fn record_daily_ip(&self, ip: Ipv4Addr, vpn_status: Result<VpnStatus, String>) {
             if !self.config.is_daily_ip_log_enabled {
                 return;
             }
             let decision = decide_daily_ip_recording(
                 self.config.include_vpn_addresses_in_daily_ip_log,
                 || {
-                    detect_vpn_status().map_err(|error| {
+                    vpn_status.map_err(|error| {
                         log::warn!(
                             "failed to detect VPN state; skipped daily public IP log entry: {error}"
                         );

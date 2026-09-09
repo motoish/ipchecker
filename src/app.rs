@@ -11,6 +11,7 @@ use crate::{
     ip_source::{FetchError, IpSource},
     monitor::NotificationDecision,
     notification::{ActionSink, MacNotifier, Notifier},
+    vpn_detection::{VpnStatus, detect_vpn_status},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -140,7 +141,10 @@ pub enum WorkerCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkerEvent {
-    FetchCompleted(Result<Ipv4Addr, FetchError>),
+    FetchCompleted {
+        result: Result<Ipv4Addr, FetchError>,
+        vpn_status: Result<VpnStatus, String>,
+    },
 }
 
 pub trait EventSink: Clone + Send + 'static {
@@ -230,11 +234,131 @@ where
     S: IpSource,
     E: EventSink,
 {
-    let event = WorkerEvent::FetchCompleted(source.fetch());
+    let event = observe_ip(source, detect_vpn_status);
     if sink.send(event).is_err() {
         eprintln!("ipchecker worker stopped because the event sink is closed");
         return false;
     }
 
     true
+}
+
+fn observe_ip<S, F>(source: &mut S, mut detect: F) -> WorkerEvent
+where
+    S: IpSource,
+    F: FnMut() -> std::io::Result<VpnStatus>,
+{
+    // Keep the VPN evidence with the request, even if the UI handles it later.
+    let before = detect().map_err(|error| error.to_string());
+    let result = source.fetch();
+    let after = detect().map_err(|error| error.to_string());
+    let vpn_status = match (before, after) {
+        (Err(error), _) | (_, Err(error)) => Err(error),
+        (Ok(VpnStatus::Inactive), Ok(VpnStatus::Inactive)) => Ok(VpnStatus::Inactive),
+        _ => Ok(VpnStatus::Active),
+    };
+    WorkerEvent::FetchCompleted { result, vpn_status }
+}
+
+#[cfg(test)]
+mod observation_tests {
+    use super::*;
+    use crate::vpn_detection::{DailyIpRecordDecision, decide_daily_ip_recording};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    struct SwitchingSource {
+        active: Arc<AtomicBool>,
+        next_active: bool,
+        fail: bool,
+    }
+
+    impl IpSource for SwitchingSource {
+        fn fetch(&mut self) -> Result<Ipv4Addr, FetchError> {
+            self.active.store(self.next_active, Ordering::SeqCst);
+            if self.fail {
+                Err(FetchError::AllSourcesFailed(Vec::new()))
+            } else {
+                Ok(Ipv4Addr::new(192, 0, 2, 1))
+            }
+        }
+    }
+
+    #[test]
+    fn vpn_evidence_brackets_fetch_and_survives_delayed_delivery() {
+        for (before, after, expected) in [
+            (true, false, DailyIpRecordDecision::SkipVpn),
+            (false, true, DailyIpRecordDecision::SkipVpn),
+            (true, true, DailyIpRecordDecision::SkipVpn),
+            (false, false, DailyIpRecordDecision::Record),
+        ] {
+            let active = Arc::new(AtomicBool::new(before));
+            let mut source = SwitchingSource {
+                active: Arc::clone(&active),
+                next_active: after,
+                fail: false,
+            };
+            let WorkerEvent::FetchCompleted { result, vpn_status } =
+                observe_ip(&mut source, || {
+                    Ok(if active.load(Ordering::SeqCst) {
+                        VpnStatus::Active
+                    } else {
+                        VpnStatus::Inactive
+                    })
+                });
+            // The UI may handle the event after another network change.
+            active.store(false, Ordering::SeqCst);
+            assert_eq!(result, Ok(Ipv4Addr::new(192, 0, 2, 1)));
+            assert_eq!(
+                decide_daily_ip_recording(false, || vpn_status.clone()),
+                expected
+            );
+            assert_eq!(
+                decide_daily_ip_recording(true, || vpn_status),
+                DailyIpRecordDecision::Record
+            );
+        }
+    }
+
+    #[test]
+    fn either_detection_failure_prevents_filtered_logging_without_losing_ip() {
+        for failed_call in [0, 1] {
+            let mut source = SwitchingSource {
+                active: Arc::new(AtomicBool::new(false)),
+                next_active: false,
+                fail: false,
+            };
+            let mut call = 0;
+            let WorkerEvent::FetchCompleted { result, vpn_status } =
+                observe_ip(&mut source, || {
+                    let fails = call == failed_call;
+                    call += 1;
+                    if fails {
+                        Err(std::io::Error::other("detection failed"))
+                    } else {
+                        Ok(VpnStatus::Inactive)
+                    }
+                });
+            assert!(result.is_ok());
+            assert_eq!(call, 2);
+            assert_eq!(
+                decide_daily_ip_recording(false, || vpn_status),
+                DailyIpRecordDecision::SkipDetectionFailed
+            );
+        }
+    }
+
+    #[test]
+    fn failed_fetch_remains_a_failure() {
+        let mut source = SwitchingSource {
+            active: Arc::new(AtomicBool::new(false)),
+            next_active: false,
+            fail: true,
+        };
+        let WorkerEvent::FetchCompleted { result, .. } =
+            observe_ip(&mut source, || Ok(VpnStatus::Inactive));
+        assert_eq!(result, Err(FetchError::AllSourcesFailed(Vec::new())));
+    }
 }

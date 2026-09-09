@@ -1,7 +1,7 @@
 use std::{
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{self, Sender},
     },
     thread::{self, JoinHandle},
@@ -33,7 +33,8 @@ pub trait NetworkMetricsSink: Clone + Send + 'static {
 }
 
 struct SharedSamplingState {
-    is_show_network_speed: AtomicBool,
+    // Low bit is visibility; upper bits identify the sampling session.
+    speed_state: AtomicUsize,
     is_show_network_latency: AtomicBool,
     is_shutdown: AtomicBool,
     latest_latency: Mutex<LatencyDisplay>,
@@ -42,7 +43,7 @@ struct SharedSamplingState {
 impl SharedSamplingState {
     fn new(sampling: NetworkMetricsSampling) -> Self {
         Self {
-            is_show_network_speed: AtomicBool::new(sampling.is_show_network_speed),
+            speed_state: AtomicUsize::new(usize::from(sampling.is_show_network_speed)),
             is_show_network_latency: AtomicBool::new(sampling.is_show_network_latency),
             is_shutdown: AtomicBool::new(false),
             latest_latency: Mutex::new(LatencyDisplay::unknown()),
@@ -50,8 +51,13 @@ impl SharedSamplingState {
     }
 
     fn set_sampling(&self, sampling: NetworkMetricsSampling) {
-        self.is_show_network_speed
-            .store(sampling.is_show_network_speed, Ordering::Relaxed);
+        self.speed_state
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+                ((state & 1 != 0) != sampling.is_show_network_speed).then(|| {
+                    ((state & !1).wrapping_add(2)) | usize::from(sampling.is_show_network_speed)
+                })
+            })
+            .ok();
         let was_latency_enabled = self.is_show_network_latency.load(Ordering::Relaxed);
         self.is_show_network_latency
             .store(sampling.is_show_network_latency, Ordering::Relaxed);
@@ -64,7 +70,7 @@ impl SharedSamplingState {
     }
 
     fn is_show_network_speed(&self) -> bool {
-        self.is_show_network_speed.load(Ordering::Relaxed)
+        self.speed_state.load(Ordering::Acquire) & 1 != 0
     }
 
     fn is_show_network_latency(&self) -> bool {
@@ -178,8 +184,10 @@ where
     S: NetworkMetricsSink,
 {
     let mut sampler = NetworkSpeedSampler::default();
+    let mut observed_state = shared.speed_state.load(Ordering::Acquire);
     while !shared.is_shutdown() {
-        if shared.is_show_network_speed() {
+        let state = reset_speed_if_needed(&shared, &mut sampler, &mut observed_state);
+        if state & 1 != 0 {
             let latency = if shared.is_show_network_latency() {
                 shared.latest_latency()
             } else {
@@ -195,12 +203,29 @@ where
                     sampler.observe_failure().clone().with_latency(latency)
                 }
             };
+            // A visibility change during the read invalidates this sample.
+            if shared.speed_state.load(Ordering::Acquire) != state {
+                continue;
+            }
             if sink.send_labels(labels).is_err() {
                 break;
             }
         }
         sleep_interruptible(&shared, SAMPLE_INTERVAL);
     }
+}
+
+fn reset_speed_if_needed(
+    shared: &SharedSamplingState,
+    sampler: &mut NetworkSpeedSampler,
+    observed_state: &mut usize,
+) -> usize {
+    let state = shared.speed_state.load(Ordering::Acquire);
+    if state != *observed_state {
+        *sampler = NetworkSpeedSampler::default();
+        *observed_state = state;
+    }
+    state
 }
 
 fn run_latency_sampler<S>(shared: Arc<SharedSamplingState>, sink: S)
@@ -231,5 +256,83 @@ fn sleep_interruptible(shared: &SharedSamplingState, duration: Duration) {
             break;
         }
         thread::sleep(remaining.min(Duration::from_millis(100)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::net_speed::{InterfaceCounters, InterfaceSnapshot};
+
+    fn snapshot(bytes: u64) -> InterfaceSnapshot {
+        [(
+            "en0".to_owned(),
+            InterfaceCounters {
+                received: bytes,
+                sent: bytes,
+            },
+        )]
+        .into_iter()
+        .collect()
+    }
+
+    #[test]
+    fn reenabling_speed_discards_old_baseline_and_average_even_between_ticks() {
+        for disabled_for in [Duration::from_secs(3600), Duration::from_millis(10)] {
+            let enabled = NetworkMetricsSampling {
+                is_show_network_speed: true,
+                is_show_network_latency: false,
+            };
+            let shared = SharedSamplingState::new(enabled);
+            let mut observed = shared.speed_state.load(Ordering::Acquire);
+            let mut sampler = NetworkSpeedSampler::default();
+            let start = Instant::now();
+            sampler.observe(start, snapshot(0));
+            assert_eq!(
+                sampler
+                    .observe(start + Duration::from_secs(1), snapshot(1_048_576))
+                    .download,
+                "1.0\tMB/s"
+            );
+
+            shared.set_sampling(NetworkMetricsSampling {
+                is_show_network_speed: false,
+                ..enabled
+            });
+            shared.set_sampling(enabled);
+            // No sampler tick occurred between disable and enable.
+            reset_speed_if_needed(&shared, &mut sampler, &mut observed);
+            let resumed = start + Duration::from_secs(1) + disabled_for;
+            assert_eq!(
+                *sampler.observe(resumed, snapshot(1_048_576)),
+                NetworkSpeedLabels::unknown()
+            );
+            let next = sampler.observe(resumed + Duration::from_secs(1), snapshot(1_048_576));
+            assert_eq!(next.download, "0\tKB/s");
+            assert_eq!(next.upload, "0\tKB/s");
+        }
+    }
+
+    #[test]
+    fn changing_latency_does_not_reset_speed_history() {
+        let shared = SharedSamplingState::new(NetworkMetricsSampling {
+            is_show_network_speed: true,
+            is_show_network_latency: false,
+        });
+        let mut observed = shared.speed_state.load(Ordering::Acquire);
+        let mut sampler = NetworkSpeedSampler::default();
+        let start = Instant::now();
+        sampler.observe(start, snapshot(0));
+        shared.set_sampling(NetworkMetricsSampling {
+            is_show_network_speed: true,
+            is_show_network_latency: true,
+        });
+        reset_speed_if_needed(&shared, &mut sampler, &mut observed);
+        assert_eq!(
+            sampler
+                .observe(start + Duration::from_secs(1), snapshot(1_048_576))
+                .download,
+            "1.0\tMB/s"
+        );
     }
 }
