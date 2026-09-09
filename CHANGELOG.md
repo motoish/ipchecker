@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.9-345215c9
+
+### Bug Fixes
+
+- Bind VPN checks to IP observations and reset speed sampling by @motoish
+
 ## 2026.9.3-240f4359
 
 ### Styling
