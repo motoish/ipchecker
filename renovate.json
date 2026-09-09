@@ -11,10 +11,7 @@
   "prHourlyLimit": 2,
   "rangeStrategy": "bump",
   "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": ["after 10am and before 11am on wednesday"],
-    "automerge": true,
-    "automergeType": "pr"
+    "enabled": false
   },
   "constraints": {
     "rust": "1.97.1"
