@@ -29,7 +29,7 @@
     {
       "description": "Automerge non-major GitHub Actions updates after CI passes",
       "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": ["minor"],
       "automerge": true,
       "automergeType": "pr"
     },
@@ -69,7 +69,7 @@
     {
       "description": "Group remaining non-major Cargo updates",
       "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": ["minor"],
       "groupName": "cargo dependencies"
     },
     {
