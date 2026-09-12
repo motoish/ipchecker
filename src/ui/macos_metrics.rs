@@ -41,12 +41,17 @@ const TRAY_ICON_TEXT_GAP: f64 = 2.0;
 /// cannot clip the trailing unit character (e.g. the "s" in "KB/s").
 #[cfg(target_os = "macos")]
 const TRAY_TRAILING_PAD: f64 = 2.0;
+/// Match iStat Menus menu-bar metrics (~9pt).
 #[cfg(target_os = "macos")]
 const SPEED_FONT_SIZE: f64 = 9.0;
 #[cfg(target_os = "macos")]
 const SPEED_LINE_HEIGHT: f64 = 10.0;
+/// Nudge the metrics stack down in the non-flipped menu-bar view
+/// (lower y = toward the bottom of the bar).
 #[cfg(target_os = "macos")]
-const LATENCY_DOT_DIAMETER: f64 = 6.0;
+const TRAY_METRICS_Y_NUDGE: f64 = 1.0;
+#[cfg(target_os = "macos")]
+const LATENCY_DOT_DIAMETER: f64 = 7.0;
 
 #[cfg(target_os = "macos")]
 #[derive(Debug)]
@@ -94,13 +99,17 @@ define_class!(
             } else {
                 NSSize::new(0.0, TRAY_ICON_POINTS)
             };
-            let icon_y = ((bounds.size.height - icon_size.height) / 2.0).round();
+            // Shared two-line stack so latency, icon, and speed share one baseline.
+            // Allow a slightly negative stack_y so the downward nudge is not
+            // clamped away when the stack nearly fills the status-item height.
+            let stack_height = SPEED_LINE_HEIGHT * 2.0;
+            let stack_y =
+                ((bounds.size.height - stack_height) / 2.0 - TRAY_METRICS_Y_NUDGE).round();
+            let icon_y = (stack_y + (stack_height - icon_size.height) / 2.0).round();
             let mut x = 0.0;
             let mut latency_dot_rect = None;
             let mut latency_text_point = None;
             if is_show_network_latency && latency_column_width > 0.0 && latency_size.width > 0.0 {
-                let stack_height = SPEED_LINE_HEIGHT * 2.0;
-                let stack_y = ((bounds.size.height - stack_height) / 2.0).round().max(0.0);
                 let text_x = ((latency_column_width - latency_size.width) / 2.0).max(0.0);
                 let circle_x = ((latency_column_width - LATENCY_DOT_DIAMETER) / 2.0).max(0.0);
                 // Non-flipped NSView: higher y is toward the menu-bar top.
@@ -132,9 +141,9 @@ define_class!(
             }
 
             if is_show_network_speed {
-                let speed_size = speed.size();
-                let speed_y = (icon_y + (icon_size.height - speed_size.height) / 2.0).round();
-                speed.drawAtPoint(NSPoint::new(x, speed_y));
+                // Paragraph line heights already define the two-line block.
+                // Re-centering with measured height lifts glyphs visually.
+                speed.drawAtPoint(NSPoint::new(x, stack_y));
             }
 
             if let Some(text_point) = latency_text_point {
