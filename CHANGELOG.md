@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.13-97752363
+
+### Bug Fixes
+
+- *(ui)* Align tray metrics baseline and enlarge latency dot by @motoish
+
 ## 2026.9.9-469a783d
 
 ### Miscellaneous Tasks
