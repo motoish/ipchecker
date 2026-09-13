@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.13-d7be8a6e
+
+### Features
+
+- Add latency modes with continuous ICMP sampling by default by @motoish
+
 ## 2026.9.13-97752363
 
 ### Bug Fixes
