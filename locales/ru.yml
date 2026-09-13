@@ -13,6 +13,7 @@ menu.mute_session: Не уведомлять в этой сессии
 menu.check_for_updates: Проверить обновления…
 menu.about: О программе ipchecker…
 menu.quit: Выход
+menu.latency_mode: Режим измерения задержки
 status.current_ip: "Текущий публичный IP: %{ip}"
 status.last_success_ip: "Последний публичный IP: %{ip}"
 status.expected_ip: "Ожидаемый IP: %{ip}"

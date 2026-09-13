@@ -13,6 +13,7 @@ menu.mute_session: Não notificar nesta sessão
 menu.check_for_updates: Procurar atualizações…
 menu.about: Sobre o ipchecker…
 menu.quit: Sair
+menu.latency_mode: Modo de latência
 status.current_ip: "IP público atual: %{ip}"
 status.last_success_ip: "Último IP público: %{ip}"
 status.expected_ip: "IP esperado: %{ip}"

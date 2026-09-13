@@ -10,7 +10,9 @@ use std::{
 
 use crate::{
     app::EventSinkClosed,
-    net_latency::{LatencyDisplay, NetworkLatencySampler, measure_tcp_latency},
+    net_latency::{
+        ContinuousPing, LatencyDisplay, LatencyMode, NetworkLatencySampler, measure_tcp_latency,
+    },
     net_speed::{
         NetworkSpeedLabels, NetworkSpeedSampler, SAMPLE_INTERVAL, read_interface_snapshot,
     },
@@ -18,6 +20,7 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NetworkMetricsSampling {
+    pub latency_mode: LatencyMode,
     pub is_show_network_speed: bool,
     pub is_show_network_latency: bool,
 }
@@ -29,24 +32,38 @@ pub enum NetworkMetricsCommand {
 }
 
 pub trait NetworkMetricsSink: Clone + Send + 'static {
-    fn send_labels(&self, labels: NetworkSpeedLabels) -> Result<(), EventSinkClosed>;
+    fn send_labels(
+        &self,
+        labels: NetworkSpeedLabels,
+        mode: LatencyMode,
+    ) -> Result<(), EventSinkClosed>;
 }
 
 struct SharedSamplingState {
     // Low bit is visibility; upper bits identify the sampling session.
     speed_state: AtomicUsize,
-    is_show_network_latency: AtomicBool,
+    latency: Mutex<LatencySession>,
     is_shutdown: AtomicBool,
-    latest_latency: Mutex<LatencyDisplay>,
+}
+
+struct LatencySession {
+    generation: usize,
+    enabled: bool,
+    mode: LatencyMode,
+    display: LatencyDisplay,
 }
 
 impl SharedSamplingState {
     fn new(sampling: NetworkMetricsSampling) -> Self {
         Self {
             speed_state: AtomicUsize::new(usize::from(sampling.is_show_network_speed)),
-            is_show_network_latency: AtomicBool::new(sampling.is_show_network_latency),
+            latency: Mutex::new(LatencySession {
+                generation: 0,
+                enabled: sampling.is_show_network_latency,
+                mode: sampling.latency_mode,
+                display: LatencyDisplay::unknown(),
+            }),
             is_shutdown: AtomicBool::new(false),
-            latest_latency: Mutex::new(LatencyDisplay::unknown()),
         }
     }
 
@@ -58,23 +75,19 @@ impl SharedSamplingState {
                 })
             })
             .ok();
-        let was_latency_enabled = self.is_show_network_latency.load(Ordering::Relaxed);
-        self.is_show_network_latency
-            .store(sampling.is_show_network_latency, Ordering::Relaxed);
-        if was_latency_enabled
-            && !sampling.is_show_network_latency
-            && let Ok(mut latest) = self.latest_latency.lock()
+        let mut latency = self.latency.lock().expect("latency session lock");
+        if latency.enabled != sampling.is_show_network_latency
+            || latency.mode != sampling.latency_mode
         {
-            *latest = LatencyDisplay::unknown();
+            latency.generation = latency.generation.wrapping_add(1);
+            latency.enabled = sampling.is_show_network_latency;
+            latency.mode = sampling.latency_mode;
+            latency.display = LatencyDisplay::unknown();
         }
     }
 
     fn is_show_network_speed(&self) -> bool {
         self.speed_state.load(Ordering::Acquire) & 1 != 0
-    }
-
-    fn is_show_network_latency(&self) -> bool {
-        self.is_show_network_latency.load(Ordering::Relaxed)
     }
 
     fn is_shutdown(&self) -> bool {
@@ -85,17 +98,18 @@ impl SharedSamplingState {
         self.is_shutdown.store(true, Ordering::Relaxed);
     }
 
-    fn latest_latency(&self) -> LatencyDisplay {
-        self.latest_latency
-            .lock()
-            .map(|guard| guard.clone())
-            .unwrap_or_else(|_| LatencyDisplay::unknown())
+    fn latest_latency(&self) -> (LatencyDisplay, LatencyMode) {
+        let latency = self.latency.lock().expect("latency session lock");
+        (latency.display.clone(), latency.mode)
     }
 
-    fn store_latency(&self, latency: LatencyDisplay) {
-        if let Ok(mut latest) = self.latest_latency.lock() {
-            *latest = latency;
+    fn store_latency(&self, generation: usize, display: LatencyDisplay) -> bool {
+        let mut latency = self.latency.lock().expect("latency session lock");
+        if latency.generation != generation {
+            return false;
         }
+        latency.display = display;
+        true
     }
 }
 
@@ -188,11 +202,7 @@ where
     while !shared.is_shutdown() {
         let state = reset_speed_if_needed(&shared, &mut sampler, &mut observed_state);
         if state & 1 != 0 {
-            let latency = if shared.is_show_network_latency() {
-                shared.latest_latency()
-            } else {
-                LatencyDisplay::unknown()
-            };
+            let (latency, mode) = shared.latest_latency();
             let labels = match read_interface_snapshot() {
                 Ok(counters) => sampler
                     .observe(Instant::now(), counters)
@@ -207,7 +217,7 @@ where
             if shared.speed_state.load(Ordering::Acquire) != state {
                 continue;
             }
-            if sink.send_labels(labels).is_err() {
+            if sink.send_labels(labels, mode).is_err() {
                 break;
             }
         }
@@ -233,18 +243,54 @@ where
     S: NetworkMetricsSink,
 {
     let mut sampler = NetworkLatencySampler::default();
+    let mut observed_generation = None;
+    let mut ping = None;
     while !shared.is_shutdown() {
-        if shared.is_show_network_latency() {
-            let latency = sampler.observe(measure_tcp_latency()).clone();
-            shared.store_latency(latency.clone());
+        let (generation, enabled, mode) = {
+            let latency = shared.latency.lock().expect("latency session lock");
+            (latency.generation, latency.enabled, latency.mode)
+        };
+        if observed_generation != Some(generation) {
+            ping = None;
+            sampler = NetworkLatencySampler::default();
+            observed_generation = Some(generation);
+        }
+        if enabled {
+            let sample = match mode {
+                LatencyMode::Tcp => measure_tcp_latency(),
+                LatencyMode::Icmp => {
+                    if ping.is_none() {
+                        ping = ContinuousPing::start().ok();
+                    }
+                    match ping.as_mut().map(ContinuousPing::next_sample) {
+                        Some(Ok(sample)) => sample,
+                        _ => {
+                            ping = None;
+                            None
+                        }
+                    }
+                }
+            };
+            let latency = sampler.observe(sample).clone();
+            log::debug!(
+                "latency mode={mode:?} sample={sample:?} display={}",
+                latency.text
+            );
+            if !shared.store_latency(generation, latency.clone()) {
+                continue;
+            }
             if !shared.is_show_network_speed() {
                 let labels = NetworkSpeedLabels::unknown().with_latency(latency);
-                if sink.send_labels(labels).is_err() {
+                if sink.send_labels(labels, mode).is_err() {
                     break;
                 }
             }
         }
-        sleep_interruptible(&shared, SAMPLE_INTERVAL);
+        // Continuous ping supplies one sample per second; do not add another
+        // sleep or buffered replies will accumulate and become stale.
+        if !(enabled && mode == LatencyMode::Icmp && ping.is_some()) {
+            sleep_interruptible(&shared, SAMPLE_INTERVAL);
+        }
     }
 }
 
@@ -277,9 +323,37 @@ mod tests {
     }
 
     #[test]
+    fn mode_switch_clears_display_and_rejects_in_flight_results() {
+        let initial = NetworkMetricsSampling {
+            latency_mode: LatencyMode::Icmp,
+            is_show_network_speed: true,
+            is_show_network_latency: true,
+        };
+        let shared = SharedSamplingState::new(initial);
+        assert!(shared.store_latency(0, LatencyDisplay::from_millis(12)));
+        shared.set_sampling(NetworkMetricsSampling {
+            latency_mode: LatencyMode::Tcp,
+            ..initial
+        });
+        assert_eq!(
+            shared.latest_latency(),
+            (LatencyDisplay::unknown(), LatencyMode::Tcp)
+        );
+        assert!(!shared.store_latency(0, LatencyDisplay::from_millis(15)));
+        assert!(shared.store_latency(1, LatencyDisplay::from_millis(45)));
+        shared.set_sampling(initial);
+        assert!(!shared.store_latency(1, LatencyDisplay::from_millis(48)));
+        assert_eq!(
+            shared.latest_latency(),
+            (LatencyDisplay::unknown(), LatencyMode::Icmp)
+        );
+    }
+
+    #[test]
     fn reenabling_speed_discards_old_baseline_and_average_even_between_ticks() {
         for disabled_for in [Duration::from_secs(3600), Duration::from_millis(10)] {
             let enabled = NetworkMetricsSampling {
+                latency_mode: LatencyMode::Icmp,
                 is_show_network_speed: true,
                 is_show_network_latency: false,
             };
@@ -296,6 +370,7 @@ mod tests {
             );
 
             shared.set_sampling(NetworkMetricsSampling {
+                latency_mode: LatencyMode::Icmp,
                 is_show_network_speed: false,
                 ..enabled
             });
@@ -316,6 +391,7 @@ mod tests {
     #[test]
     fn changing_latency_does_not_reset_speed_history() {
         let shared = SharedSamplingState::new(NetworkMetricsSampling {
+            latency_mode: LatencyMode::Icmp,
             is_show_network_speed: true,
             is_show_network_latency: false,
         });
@@ -324,6 +400,7 @@ mod tests {
         let start = Instant::now();
         sampler.observe(start, snapshot(0));
         shared.set_sampling(NetworkMetricsSampling {
+            latency_mode: LatencyMode::Icmp,
             is_show_network_speed: true,
             is_show_network_latency: true,
         });

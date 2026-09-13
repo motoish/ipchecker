@@ -19,7 +19,11 @@ struct RecordingSink {
 }
 
 impl NetworkMetricsSink for RecordingSink {
-    fn send_labels(&self, labels: NetworkSpeedLabels) -> Result<(), EventSinkClosed> {
+    fn send_labels(
+        &self,
+        labels: NetworkSpeedLabels,
+        _mode: ipchecker::net_latency::LatencyMode,
+    ) -> Result<(), EventSinkClosed> {
         self.send_count.fetch_add(1, Ordering::SeqCst);
         self.labels.lock().expect("labels mutex").push(labels);
         Ok(())
@@ -35,6 +39,7 @@ fn disabled_sampling_does_not_emit_labels() {
     let handle = NetworkMetricsHandle::start(
         sink.clone(),
         NetworkMetricsSampling {
+            latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
             is_show_network_speed: false,
             is_show_network_latency: false,
         },
@@ -56,6 +61,7 @@ fn enabling_speed_only_emits_speed_labels_without_waiting_on_latency() {
     let handle = NetworkMetricsHandle::start(
         sink.clone(),
         NetworkMetricsSampling {
+            latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
             is_show_network_speed: true,
             is_show_network_latency: false,
         },

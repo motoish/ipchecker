@@ -13,6 +13,7 @@ menu.mute_session: 本会话不再提醒
 menu.check_for_updates: 检查更新…
 menu.about: 关于 ipchecker…
 menu.quit: 退出
+menu.latency_mode: 延迟测量模式
 status.current_ip: "当前公网 IP：%{ip}"
 status.last_success_ip: "上次公网 IP：%{ip}"
 status.expected_ip: "期望 IP：%{ip}"

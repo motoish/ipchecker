@@ -1,3 +1,4 @@
+use crate::net_latency::LatencyMode;
 use crate::{config::ALLOWED_INTERVAL_MINUTES, net_speed::NetworkSpeedLabels};
 use tray_icon::{
     TrayIcon, TrayIconBuilder,
@@ -20,6 +21,8 @@ struct IntervalMenuItem {
 
 pub struct TrayUi {
     tray: TrayIcon,
+    latency_menu: Submenu,
+    latency_items: [(LatencyMode, CheckMenuItem); 2],
     current_item: MenuItem,
     expected_item: MenuItem,
     set_expected_from_input_item: MenuItem,
@@ -44,6 +47,24 @@ pub struct TrayUi {
 impl TrayUi {
     pub fn new(model: &UiModel) -> Result<Self, UiError> {
         let menu = Menu::new();
+        let latency_menu = Submenu::new(
+            format!(
+                "{}: {}",
+                t!("menu.latency_mode"),
+                model.latency_mode.menu_label()
+            ),
+            true,
+        );
+        let latency_items = [LatencyMode::Icmp, LatencyMode::Tcp].map(|mode| {
+            (
+                mode,
+                CheckMenuItem::new(mode.menu_label(), true, model.latency_mode == mode, None),
+            )
+        });
+        for (_, item) in &latency_items {
+            latency_menu.append(item)?;
+        }
+
         let current_item = MenuItem::new(&model.current_title, model.can_copy_current_ip, None);
         let expected_item = MenuItem::new(&model.expected_title, false, None);
         let set_expected_from_input_item =
@@ -128,6 +149,7 @@ impl TrayUi {
             &separators[2],
             &show_network_speed_item,
             &show_network_latency_item,
+            &latency_menu,
             &show_status_icon_item,
             &daily_ip_log_item,
             &daily_ip_log_include_vpn_addresses_item,
@@ -152,6 +174,8 @@ impl TrayUi {
 
         let ui = Self {
             tray,
+            latency_menu,
+            latency_items,
             current_item,
             expected_item,
             set_expected_from_input_item,
@@ -182,6 +206,14 @@ impl TrayUi {
     }
 
     pub fn apply(&self, model: &UiModel) -> Result<(), UiError> {
+        self.latency_menu.set_text(format!(
+            "{}: {}",
+            t!("menu.latency_mode"),
+            model.latency_mode.menu_label()
+        ));
+        for (mode, item) in &self.latency_items {
+            item.set_checked(*mode == model.latency_mode);
+        }
         self.current_item.set_text(&model.current_title);
         self.current_item.set_enabled(model.can_copy_current_ip);
         self.expected_item.set_text(&model.expected_title);
@@ -251,6 +283,11 @@ impl TrayUi {
     }
 
     pub fn menu_action(&self, id: &MenuId) -> Option<MenuAction> {
+        for (mode, item) in &self.latency_items {
+            if id == item.id() {
+                return Some(MenuAction::SetLatencyMode(*mode));
+            }
+        }
         if id == self.current_item.id() {
             return Some(MenuAction::CopyCurrentIp);
         }

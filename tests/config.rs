@@ -129,6 +129,7 @@ fn wrong_typed_fields_recover_independently() {
 #[test]
 fn valid_toml_round_trips() {
     let expected = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip: Some(Ipv4Addr::from_str("203.0.113.10").unwrap()),
         interval_minutes: 15,
         is_show_network_speed: false,
@@ -162,6 +163,7 @@ fn save_overwrites_existing_configuration() {
     let path = dir.path().join("config.toml");
     let store = ConfigStore::new(path.clone());
     let initial = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip: Some(Ipv4Addr::from_str("198.51.100.7").unwrap()),
         interval_minutes: 1,
         is_show_network_speed: true,
@@ -172,6 +174,7 @@ fn save_overwrites_existing_configuration() {
         include_vpn_addresses_in_daily_ip_log: true,
     };
     let replacement = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip: Some(Ipv4Addr::from_str("203.0.113.8").unwrap()),
         interval_minutes: 60,
         is_show_network_speed: false,
@@ -187,4 +190,16 @@ fn save_overwrites_existing_configuration() {
 
     let contents = std::fs::read_to_string(path).unwrap();
     assert_eq!(Config::from_toml(&contents), replacement);
+}
+
+#[test]
+fn latency_mode_defaults_and_round_trips() {
+    use ipchecker::net_latency::LatencyMode;
+    assert_eq!(Config::default().latency_mode, LatencyMode::Icmp);
+    for input in ["", "latency_mode = 'invalid'", "latency_mode = 42"] {
+        assert_eq!(Config::from_toml(input).latency_mode, LatencyMode::Icmp);
+    }
+    let config = Config::from_toml("latency_mode = 'tcp'");
+    assert_eq!(config.latency_mode, LatencyMode::Tcp);
+    assert_eq!(Config::from_toml(&config.to_toml().unwrap()), config);
 }

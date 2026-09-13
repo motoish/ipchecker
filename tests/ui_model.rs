@@ -21,6 +21,7 @@ fn model_for(
     muted: bool,
 ) -> UiModel {
     let config = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip,
         interval_minutes: 5,
         is_show_network_speed: true,
@@ -232,6 +233,7 @@ fn stateless_menu_actions_map_to_their_matching_commands() {
 #[test]
 fn ui_model_exposes_daily_ip_log_state_from_config() {
     let config = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         is_daily_ip_log_enabled: true,
         daily_ip_log_directory: Some(std::path::PathBuf::from("/tmp/ipchecker-logs")),
         ..Config::default()
@@ -252,6 +254,7 @@ fn ui_model_exposes_daily_ip_log_state_from_config() {
 #[test]
 fn ui_model_exposes_vpn_log_preference_from_config() {
     let config = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         include_vpn_addresses_in_daily_ip_log: false,
         ..Config::default()
     };
@@ -345,6 +348,7 @@ fn show_status_icon_menu_action_inverts_the_saved_choice() {
 #[test]
 fn ui_model_exposes_show_network_speed_from_config() {
     let config = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip: None,
         interval_minutes: 5,
         is_show_network_speed: false,
@@ -370,6 +374,7 @@ fn ui_model_exposes_show_network_speed_from_config() {
 #[test]
 fn ui_model_exposes_show_network_latency_from_config() {
     let config = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip: None,
         interval_minutes: 5,
         is_show_network_speed: true,
@@ -395,6 +400,7 @@ fn ui_model_exposes_show_network_latency_from_config() {
 #[test]
 fn ui_model_exposes_show_status_icon_from_config() {
     let config = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip: None,
         interval_minutes: 5,
         is_show_network_speed: true,
@@ -420,6 +426,7 @@ fn ui_model_exposes_show_status_icon_from_config() {
 #[test]
 fn ui_model_disables_unchecking_the_last_visible_tray_item() {
     let config = Config {
+        latency_mode: ipchecker::net_latency::LatencyMode::Icmp,
         expected_ip: None,
         interval_minutes: 5,
         is_show_network_speed: true,
@@ -493,4 +500,28 @@ fn normal_ui_update_cancels_pending_feedback_restore() {
     guard.cancel();
 
     assert!(!guard.claim(token));
+}
+
+#[test]
+fn latency_mode_menu_actions_preserve_selection_and_target() {
+    use ipchecker::net_latency::LatencyMode;
+    for (mode, label) in [
+        (LatencyMode::Icmp, "ICMP · 1.1.1.1"),
+        (LatencyMode::Tcp, "TCP · 1.1.1.1:443"),
+    ] {
+        assert_eq!(mode.menu_label(), label);
+        assert_eq!(
+            UiCommand::from_menu_action(MenuAction::SetLatencyMode(mode), false, true, true, true),
+            UiCommand::SetLatencyMode(mode)
+        );
+        let config = Config {
+            latency_mode: mode,
+            ..Config::default()
+        };
+        let outcome = Monitor::default().apply(Ok(ip("1.1.1.1")), None, false);
+        assert_eq!(
+            UiModel::from_state(&config, &Session::new(), &outcome).latency_mode,
+            mode
+        );
+    }
 }

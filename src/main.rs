@@ -19,6 +19,7 @@ mod macos {
         ip_input::prompt_expected_ip,
         ip_source::ReqwestIpSource,
         monitor::{Monitor, MonitorOutcome, MonitorState},
+        net_latency::{LatencyDisplay, LatencyMode},
         net_metrics::{NetworkMetricsHandle, NetworkMetricsSampling, NetworkMetricsSink},
         net_speed::NetworkSpeedLabels,
         notification::{ActionSink, MacNotifier, NotificationAction},
@@ -42,7 +43,7 @@ mod macos {
         Notification(NotificationAction),
         NotifierReady(Result<MacNotifier, String>),
         RestoreExpectedTitle(u64),
-        NetworkSpeed(NetworkSpeedLabels),
+        NetworkSpeed(NetworkSpeedLabels, LatencyMode),
         DailyIpLog(DailyIpLogEvent),
         Update(UpdateCoordinatorEvent),
     }
@@ -82,9 +83,13 @@ mod macos {
     }
 
     impl NetworkMetricsSink for NetworkMetricsEventProxy {
-        fn send_labels(&self, labels: NetworkSpeedLabels) -> Result<(), EventSinkClosed> {
+        fn send_labels(
+            &self,
+            labels: NetworkSpeedLabels,
+            mode: LatencyMode,
+        ) -> Result<(), EventSinkClosed> {
             self.proxy
-                .send_event(UserEvent::NetworkSpeed(labels))
+                .send_event(UserEvent::NetworkSpeed(labels, mode))
                 .map_err(|_| EventSinkClosed)
         }
     }
@@ -268,7 +273,10 @@ mod macos {
                         self.render_ui();
                     }
                 }
-                UserEvent::NetworkSpeed(labels) => {
+                UserEvent::NetworkSpeed(labels, mode) => {
+                    if mode != self.config.latency_mode {
+                        return;
+                    }
                     if self.speed_labels == labels {
                         return;
                     }
@@ -309,6 +317,17 @@ mod macos {
                 UiCommand::SetExpectedFromInput => self.set_expected_from_input(),
                 UiCommand::UseCurrentIp => self.use_current_ip(),
                 UiCommand::SetInterval(minutes) => self.set_interval(minutes),
+                UiCommand::SetLatencyMode(mode) => {
+                    if self.config.latency_mode != mode {
+                        let mut candidate = self.config.clone();
+                        candidate.latency_mode = mode;
+                        if self.save_candidate(candidate) {
+                            self.speed_labels.latency = LatencyDisplay::unknown();
+                            self.sync_network_metrics_sampling();
+                        }
+                    }
+                    self.apply_ui();
+                }
                 UiCommand::CheckNow => self.send_worker_command(WorkerCommand::CheckNow),
                 UiCommand::SetMuted(muted) => self.set_muted(muted),
                 UiCommand::SetShowNetworkSpeed(is_show_network_speed) => {
@@ -335,6 +354,8 @@ mod macos {
                 UiCommand::CheckForUpdates => self.start_update_check(),
                 UiCommand::About => show_about(),
                 UiCommand::Quit => {
+                    // Stop the continuous ping child before the event loop exits.
+                    self.network_metrics.take();
                     self.send_worker_command(WorkerCommand::Shutdown);
                     *control_flow = ControlFlow::Exit;
                 }
@@ -636,6 +657,7 @@ mod macos {
                 return;
             };
             network_metrics.set_sampling(NetworkMetricsSampling {
+                latency_mode: self.config.latency_mode,
                 is_show_network_speed: self.config.is_show_network_speed,
                 is_show_network_latency: self.config.is_show_network_latency,
             });
@@ -654,6 +676,7 @@ mod macos {
                     proxy: self.proxy.clone(),
                 },
                 NetworkMetricsSampling {
+                    latency_mode: self.config.latency_mode,
                     is_show_network_speed: self.config.is_show_network_speed,
                     is_show_network_latency: self.config.is_show_network_latency,
                 },

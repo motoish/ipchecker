@@ -6,6 +6,7 @@ use std::{
     str::FromStr,
 };
 
+use crate::net_latency::LatencyMode;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
@@ -25,6 +26,8 @@ pub enum ConfigError {
 
 #[derive(Deserialize, Default)]
 struct RawConfig {
+    #[serde(default, deserialize_with = "recover_string")]
+    latency_mode: Option<String>,
     #[serde(default, deserialize_with = "recover_string")]
     expected_ip: Option<String>,
     #[serde(default, deserialize_with = "recover_u64")]
@@ -76,6 +79,7 @@ where
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Config {
+    pub latency_mode: LatencyMode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_ip: Option<Ipv4Addr>,
     pub interval_minutes: u64,
@@ -96,6 +100,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            latency_mode: LatencyMode::Icmp,
             expected_ip: None,
             interval_minutes: 5,
             is_show_network_speed: true,
@@ -144,6 +149,10 @@ impl Config {
 
         let daily_ip_log_directory = raw.daily_ip_log_directory;
         let mut config = Self {
+            latency_mode: match raw.latency_mode.as_deref() {
+                Some("tcp") => LatencyMode::Tcp,
+                _ => LatencyMode::Icmp,
+            },
             expected_ip: raw
                 .expected_ip
                 .and_then(|value| Ipv4Addr::from_str(&value).ok()),

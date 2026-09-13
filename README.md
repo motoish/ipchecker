@@ -49,6 +49,8 @@ Configuration is stored at:
 
 The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon` (all default `true`). At least one of the three must remain enabled so the menu bar entry stays accessible. Hiding the status icon also disables all public-IP check notifications, including mismatch and fetch-failure notifications.
 
+Latency defaults to **ICMP ping to `1.1.1.1`**, sampled continuously once per second. The **Latency Mode** submenu also offers **TCP connect to `1.1.1.1:443`** and shows the selected method and target. The choice is saved as `latency_mode = "icmp"` or `"tcp"`; switching modes clears the previous average. Both modes follow system routing.
+
 Daily IP logging is off by default. When enabled, choose an output folder and ipchecker creates `ipchecker-daily-global-ip-log-YYYY-MM.csv`. Enabling the log, or changing its output folder while enabled, triggers an immediate public IP check. Each date has one row; multiple addresses observed on the same day are separated with `;`. **Record VPN Addresses** defaults to on. Turn it off to skip observations if an active VPN tunnel carries IPv4 routes before or after the IP request, or if either VPN check fails. Brief VPN connections entirely between these checks may go undetected. Existing CSV entries are never changed.
 
 ## Development

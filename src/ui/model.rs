@@ -1,3 +1,4 @@
+use crate::net_latency::LatencyMode;
 use crate::{
     config::Config,
     monitor::{MonitorOutcome, MonitorState},
@@ -13,6 +14,7 @@ pub enum IconState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiModel {
+    pub latency_mode: LatencyMode,
     pub current_title: String,
     pub expected_title: String,
     pub can_use_current_ip: bool,
@@ -69,6 +71,7 @@ impl UiModel {
         };
 
         Self {
+            latency_mode: config.latency_mode,
             current_title,
             expected_title: t!("status.expected_ip", ip = expected_value).to_string(),
             can_use_current_ip: outcome.current_ip.is_some(),
@@ -101,6 +104,7 @@ pub enum MenuAction {
     SetExpectedFromInput,
     UseCurrentIp,
     SetInterval(u64),
+    SetLatencyMode(LatencyMode),
     CheckNow,
     ToggleMuted,
     ToggleShowNetworkSpeed,
@@ -120,6 +124,7 @@ pub enum UiCommand {
     SetExpectedFromInput,
     UseCurrentIp,
     SetInterval(u64),
+    SetLatencyMode(LatencyMode),
     CheckNow,
     SetMuted(bool),
     SetShowNetworkSpeed(bool),
@@ -142,6 +147,7 @@ impl UiCommand {
         is_show_status_icon: bool,
     ) -> Self {
         match action {
+            MenuAction::SetLatencyMode(mode) => Self::SetLatencyMode(mode),
             MenuAction::CopyCurrentIp => Self::CopyCurrentIp,
             MenuAction::SetExpectedFromInput => Self::SetExpectedFromInput,
             MenuAction::UseCurrentIp => Self::UseCurrentIp,

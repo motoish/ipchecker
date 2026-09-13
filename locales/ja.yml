@@ -13,6 +13,7 @@ menu.mute_session: このセッションでは通知しない
 menu.check_for_updates: アップデートを確認…
 menu.about: ipcheckerについて…
 menu.quit: 終了
+menu.latency_mode: 遅延測定モード
 status.current_ip: "現在のグローバルIP：%{ip}"
 status.last_success_ip: "前回のグローバルIP：%{ip}"
 status.expected_ip: "期待IP：%{ip}"

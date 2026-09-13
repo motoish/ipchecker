@@ -13,6 +13,7 @@ menu.mute_session: 이 세션에서 알림 끄기
 menu.check_for_updates: 업데이트 확인…
 menu.about: ipchecker 정보…
 menu.quit: 종료
+menu.latency_mode: 지연 측정 모드
 status.current_ip: "현재 공인 IP: %{ip}"
 status.last_success_ip: "마지막 공인 IP: %{ip}"
 status.expected_ip: "예상 IP: %{ip}"
