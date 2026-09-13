@@ -11,7 +11,8 @@ use std::{
 use crate::{
     app::EventSinkClosed,
     net_latency::{
-        ContinuousPing, LatencyDisplay, LatencyMode, NetworkLatencySampler, measure_tcp_latency,
+        ContinuousPing, LATENCY_SAMPLE_INTERVAL, LatencyDisplay, LatencyMode,
+        NetworkLatencySampler, measure_tcp_latency,
     },
     net_speed::{
         NetworkSpeedLabels, NetworkSpeedSampler, SAMPLE_INTERVAL, read_interface_snapshot,
@@ -246,6 +247,7 @@ where
     let mut observed_generation = None;
     let mut ping = None;
     while !shared.is_shutdown() {
+        let started = Instant::now();
         let (generation, enabled, mode) = {
             let latency = shared.latency.lock().expect("latency session lock");
             (latency.generation, latency.enabled, latency.mode)
@@ -262,7 +264,17 @@ where
                     if ping.is_none() {
                         ping = ContinuousPing::start().ok();
                     }
-                    match ping.as_mut().map(ContinuousPing::next_sample) {
+                    match ping.as_mut().map(|probe| {
+                        probe.next_sample_while(|| {
+                            !shared.is_shutdown()
+                                && shared
+                                    .latency
+                                    .lock()
+                                    .expect("latency session lock")
+                                    .generation
+                                    == generation
+                        })
+                    }) {
                         Some(Ok(sample)) => sample,
                         _ => {
                             ping = None;
@@ -286,10 +298,25 @@ where
                 }
             }
         }
-        // Continuous ping supplies one sample per second; do not add another
+        // Continuous ping supplies one sample every five seconds; do not add another
         // sleep or buffered replies will accumulate and become stale.
         if !(enabled && mode == LatencyMode::Icmp && ping.is_some()) {
-            sleep_interruptible(&shared, SAMPLE_INTERVAL);
+            // TCP uses start-to-start spacing. Mode changes interrupt the wait.
+            let deadline = started + LATENCY_SAMPLE_INTERVAL;
+            while !shared.is_shutdown()
+                && shared
+                    .latency
+                    .lock()
+                    .expect("latency session lock")
+                    .generation
+                    == generation
+            {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    break;
+                }
+                thread::sleep(remaining.min(Duration::from_millis(100)));
+            }
         }
     }
 }

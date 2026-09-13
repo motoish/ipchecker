@@ -6,6 +6,7 @@ use std::{
 
 pub const LATENCY_HOST: &str = "1.1.1.1";
 pub const LATENCY_PORT: u16 = 443;
+pub const LATENCY_SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 pub const LATENCY_TIMEOUT: Duration = Duration::from_secs(2);
 /// Low latency is strictly below this threshold (ms).
 pub const LOW_LATENCY_MS: u64 = 100;
@@ -188,6 +189,32 @@ mod continuous_ping_tests {
     }
 
     #[test]
+    fn cancelling_a_pending_probe_does_not_wait_for_the_next_packet() {
+        let child = Command::new("/bin/cat")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut ping = ContinuousPing::from_child(child).unwrap();
+        let started = Instant::now();
+        assert_eq!(
+            ping.next_sample_while(|| false).unwrap_err().kind(),
+            std::io::ErrorKind::Interrupted
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn continuous_probe_tolerates_the_gap_between_five_second_samples() {
+        let child = Command::new("/bin/sh")
+            .args(["-c", "printf '64 bytes from 1.1.1.1: time=16 ms\n'; sleep 3; printf '64 bytes from 1.1.1.1: time=17 ms\n'"])
+            .stdout(Stdio::piped()).spawn().unwrap();
+        let mut ping = ContinuousPing::from_child(child).unwrap();
+        assert_eq!(ping.next_sample().unwrap(), Some(16));
+        assert_eq!(ping.next_sample().unwrap(), Some(17));
+    }
+
+    #[test]
     fn continuous_stream_preserves_samples_and_timeouts() {
         let child = Command::new("/usr/bin/printf")
             .arg("PING 1.1.1.1\n64 bytes from 1.1.1.1: time=16.5 ms\nRequest timeout for icmp_seq 1\n64 bytes from 1.1.1.1: time=18.2 ms\n")
@@ -217,7 +244,14 @@ impl ContinuousPing {
         {
             use std::process::{Command, Stdio};
             let child = Command::new("/sbin/ping")
-                .args(["-n", "-i", "1", "-W", "1000", LATENCY_HOST])
+                .args([
+                    "-n",
+                    "-i",
+                    &LATENCY_SAMPLE_INTERVAL.as_secs().to_string(),
+                    "-W",
+                    "1000",
+                    LATENCY_HOST,
+                ])
                 .env("LC_ALL", "C")
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
@@ -255,15 +289,29 @@ impl ContinuousPing {
         Ok(probe)
     }
 
-    pub(crate) fn next_sample(&mut self) -> std::io::Result<Option<u64>> {
+    #[cfg(test)]
+    fn next_sample(&mut self) -> std::io::Result<Option<u64>> {
+        self.next_sample_while(|| true)
+    }
+
+    pub(crate) fn next_sample_while(
+        &mut self,
+        keep_waiting: impl Fn() -> bool,
+    ) -> std::io::Result<Option<u64>> {
         #[cfg(target_os = "macos")]
         {
             use std::{
                 io::{self, Read},
                 os::fd::AsRawFd,
             };
-            let deadline = Instant::now() + LATENCY_TIMEOUT;
+            let deadline = Instant::now() + LATENCY_SAMPLE_INTERVAL + LATENCY_TIMEOUT;
             loop {
+                if !keep_waiting() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        "latency sampling changed",
+                    ));
+                }
                 while let Some(end) = self.buffer.iter().position(|byte| *byte == b'\n') {
                     let line: Vec<u8> = self.buffer.drain(..=end).collect();
                     let line = String::from_utf8_lossy(&line);
@@ -290,8 +338,13 @@ impl ContinuousPing {
                     revents: 0,
                 };
                 // SAFETY: descriptor points to one initialized pollfd with a live pipe fd.
-                let ready =
-                    unsafe { libc::poll(&mut descriptor, 1, remaining.as_millis().max(1) as i32) };
+                let ready = unsafe {
+                    libc::poll(
+                        &mut descriptor,
+                        1,
+                        remaining.as_millis().clamp(1, 100) as i32,
+                    )
+                };
                 if ready < 0 {
                     let error = io::Error::last_os_error();
                     if error.kind() == io::ErrorKind::Interrupted {
@@ -321,10 +374,13 @@ impl ContinuousPing {
             }
         }
         #[cfg(not(target_os = "macos"))]
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "ICMP requires macOS",
-        ))
+        {
+            let _ = keep_waiting;
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "ICMP requires macOS",
+            ))
+        }
     }
 }
 
