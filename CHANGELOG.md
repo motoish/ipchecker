@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.9.13-d9adca57
+
+### Performance
+
+- Sample network latency every five seconds by @motoish
+
 ## 2026.9.13-d7be8a6e
 
 ### Features

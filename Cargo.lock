@@ -1393,7 +1393,7 @@ dependencies = [
 
 [[package]]
 name = "ipchecker"
-version = "2026.9.13-d7be8a6e"
+version = "2026.9.13-d9adca57"
 dependencies = [
  "arboard",
  "chrono",
