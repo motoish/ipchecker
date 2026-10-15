@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.10.15-b6630804
+
+### Bug Fixes
+
+- Update ubuntu runner by @motoish
+
 ## 2026.9.13-d9adca57
 
 ### Performance
