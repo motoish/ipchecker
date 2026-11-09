@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.97.1
@@ -26,7 +26,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.9.3
         with:
           shared-key: macos
 
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout main
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -58,7 +58,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.97.1
 
       - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.9.3
         with:
           shared-key: macos
           save-if: "false"
@@ -104,7 +104,7 @@ jobs:
             update.json
 
       - name: Generate CHANGELOG.md
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@v4.9.1
         with:
           config: cliff.toml
           args: --tag ${{ steps.identity.outputs.build_tag }}
@@ -128,7 +128,7 @@ jobs:
           echo "range=$range" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@v4.9.1
         with:
           config: cliff.toml
           args: --tag ${{ steps.identity.outputs.build_tag }} ${{ steps.release_range.outputs.range }}
@@ -157,7 +157,7 @@ jobs:
 
       - name: Publish CalVer release records
         id: calver
-        uses: motoish/calver-release-action@v1
+        uses: motoish/calver-release-action@v1.1.3
         with:
           mode: daily
           timezone: Asia/Tokyo
