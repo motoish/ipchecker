@@ -14,7 +14,7 @@ concurrency:
 jobs:
   check:
     name: Format, lint, and test
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository
@@ -43,7 +43,7 @@ jobs:
     name: Release
     needs: check
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message || '', 'chore(release):') }}
-    runs-on: macos-latest
+    runs-on: macos-15
     permissions:
       contents: write
 
