@@ -633,7 +633,7 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     assert!(identity_run.contains("date +%s"));
 
     let calver = step_with_id(&steps, "calver");
-    assert_eq!(calver["uses"], "motoish/calver-release-action@v1");
+    assert_eq!(calver["uses"], "motoish/calver-release-action@v1.1.4");
     assert_eq!(calver["with"]["mode"], "daily");
     assert_eq!(calver["with"]["timezone"], "Asia/Tokyo");
     assert_eq!(calver["with"]["token"], "${{ github.token }}");
@@ -691,7 +691,7 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     );
 
     let changelog = steps[changelog_index];
-    assert_eq!(changelog["uses"], "orhun/git-cliff-action@v4");
+    assert_eq!(changelog["uses"], "orhun/git-cliff-action@v4.9.1");
     assert_eq!(changelog["env"]["OUTPUT"], "CHANGELOG.md");
     assert_eq!(
         changelog["with"]["args"],
@@ -708,7 +708,7 @@ fn daily_workflow_delegates_release_channels_and_uploads_immutable_assets() {
     assert!(release_range_run.contains("$GITHUB_OUTPUT"));
 
     let release_notes = steps[release_notes_index];
-    assert_eq!(release_notes["uses"], "orhun/git-cliff-action@v4");
+    assert_eq!(release_notes["uses"], "orhun/git-cliff-action@v4.9.1");
     assert_eq!(release_notes["env"]["OUTPUT"], "release-notes.md");
     assert_eq!(
         release_notes["with"]["args"],
@@ -851,7 +851,7 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     assert!(preflight_run.contains("jq -e"));
 
     let calver = steps[calver_index];
-    assert_eq!(calver["uses"], "motoish/calver-release-action@v1");
+    assert_eq!(calver["uses"], "motoish/calver-release-action@v1.1.4");
     assert_eq!(calver["with"]["mode"], "promote");
     assert_eq!(calver["with"]["source_tag"], "${{ inputs.source_tag }}");
     assert_eq!(calver["with"]["token"], "${{ github.token }}");
@@ -871,7 +871,7 @@ fn promotion_workflow_copies_selected_build_assets_to_monthly_stable() {
     assert!(stable_range_run.contains("$GITHUB_OUTPUT"));
 
     let stable_notes = steps[stable_notes_index];
-    assert_eq!(stable_notes["uses"], "orhun/git-cliff-action@v4");
+    assert_eq!(stable_notes["uses"], "orhun/git-cliff-action@v4.9.1");
     assert_eq!(stable_notes["with"]["config"], "cliff.toml");
     let stable_notes_args = stable_notes["with"]["args"].as_str().unwrap();
     assert!(stable_notes_args.contains("--ignore-tags '.*'"));

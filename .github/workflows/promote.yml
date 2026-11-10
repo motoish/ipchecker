@@ -60,7 +60,7 @@ jobs:
 
       - name: Promote monthly stable release
         id: calver
-        uses: motoish/calver-release-action@v1.1.3
+        uses: motoish/calver-release-action@v1.1.4
         with:
           mode: promote
           source_tag: ${{ inputs.source_tag }}
