@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.11.10-39b141c3
+
+### Miscellaneous Tasks
+
+- Use GitHub Actions workflow dependency lockfiles by @motoish
+- Update macos runner by @motoish
+- Bump calver-release-action to v1.1.4 by @motoish
+
 ## 2026.10.15-b6630804
 
 ### Bug Fixes
