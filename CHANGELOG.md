@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026.11.20-5725d9ee
+
+### Bug Fixes
+
+- *(config)* Preserve metric visibility for legacy configs by @motoish
+- *(test)* Tolerate client disconnect in update manifest fixture by @motoish
+
+### Documentation
+
+- Modify README by @motoish
+- Modify README by @motoish
+- Bump up rust-version by @motoish
+
+### Features
+
+- *(ui)* Simplify menu bar layout and group menu actions by @motoish
+
+### Miscellaneous Tasks
+
+- Modify lockfiles by @motoish
+
 ## 2026.11.10-39b141c3
 
 ### Miscellaneous Tasks
