@@ -6,8 +6,8 @@ use tempfile::tempdir;
 fn defaults_to_five_minutes_without_expected_ip() {
     assert_eq!(Config::default().interval_minutes, 5);
     assert_eq!(Config::default().expected_ip, None);
-    assert!(Config::default().is_show_network_speed);
-    assert!(Config::default().is_show_network_latency);
+    assert!(!Config::default().is_show_network_speed);
+    assert!(!Config::default().is_show_network_latency);
     assert!(Config::default().is_show_status_icon);
     assert!(!Config::default().is_daily_ip_log_enabled);
     assert_eq!(Config::default().daily_ip_log_directory, None);
@@ -52,29 +52,29 @@ fn vpn_log_preference_can_be_disabled() {
 }
 
 #[test]
-fn missing_show_network_speed_defaults_to_enabled() {
+fn missing_show_network_speed_defaults_to_disabled() {
     let config = Config::from_toml("interval_minutes = 15\n");
-    assert!(config.is_show_network_speed);
+    assert!(!config.is_show_network_speed);
     assert_eq!(config.interval_minutes, 15);
 }
 
 #[test]
-fn invalid_show_network_speed_recovers_to_enabled() {
+fn invalid_show_network_speed_recovers_to_disabled() {
     let config = Config::from_toml("show_network_speed = \"nope\"\ninterval_minutes = 30\n");
-    assert!(config.is_show_network_speed);
+    assert!(!config.is_show_network_speed);
     assert_eq!(config.interval_minutes, 30);
 }
 
 #[test]
-fn missing_show_network_latency_defaults_to_enabled() {
+fn missing_show_network_latency_defaults_to_disabled() {
     let config = Config::from_toml("interval_minutes = 15\n");
-    assert!(config.is_show_network_latency);
+    assert!(!config.is_show_network_latency);
 }
 
 #[test]
-fn invalid_show_network_latency_recovers_to_enabled() {
+fn invalid_show_network_latency_recovers_to_disabled() {
     let config = Config::from_toml("show_network_latency = \"nope\"\ninterval_minutes = 30\n");
-    assert!(config.is_show_network_latency);
+    assert!(!config.is_show_network_latency);
     assert_eq!(config.interval_minutes, 30);
 }
 

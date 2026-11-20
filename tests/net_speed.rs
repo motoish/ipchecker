@@ -73,7 +73,7 @@ fn tray_titles_pin_units_with_tabs() {
         NetworkSpeedLabels::unknown().speed_tray_title(),
         format!("↑\t{}\n↓\t{}", rate("—", "KB/s"), rate("—", "KB/s"))
     );
-    assert_eq!(NetworkSpeedLabels::unknown().latency_tray_title(), "?");
+    assert_eq!(NetworkSpeedLabels::unknown().latency_tray_title(), "—");
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn first_sample_stays_unknown_until_a_delta_exists() {
         first.speed_tray_title(),
         format!("↑\t{}\n↓\t{}", rate("—", "KB/s"), rate("—", "KB/s"))
     );
-    assert_eq!(first.latency_tray_title(), "?");
+    assert_eq!(first.latency_tray_title(), "—");
 }
 
 #[test]

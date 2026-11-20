@@ -13,7 +13,7 @@ pub const LOW_LATENCY_MS: u64 = 100;
 /// Medium latency is below this threshold; at or above is high (ms).
 pub const MEDIUM_LATENCY_MS: u64 = 300;
 const LATENCY_AVERAGE_SAMPLES: usize = 3;
-const HIGH_LATENCY_TEXT: &str = "?";
+const UNKNOWN_LATENCY_TEXT: &str = "—";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LatencyLevel {
@@ -45,17 +45,15 @@ impl LatencyDisplay {
     pub fn unknown() -> Self {
         Self {
             level: LatencyLevel::High,
-            text: HIGH_LATENCY_TEXT.to_owned(),
+            text: UNKNOWN_LATENCY_TEXT.to_owned(),
         }
     }
 
     pub fn from_millis(millis: u64) -> Self {
-        let level = LatencyLevel::from_millis(millis);
-        let text = match level {
-            LatencyLevel::High => HIGH_LATENCY_TEXT.to_owned(),
-            LatencyLevel::Low | LatencyLevel::Medium => format!("{millis} ms"),
-        };
-        Self { level, text }
+        Self {
+            level: LatencyLevel::from_millis(millis),
+            text: format!("{millis} ms"),
+        }
     }
 }
 

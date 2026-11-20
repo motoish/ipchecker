@@ -7,6 +7,8 @@ menu.show_network_speed: Show Network Speed
 menu.show_network_latency: Show Network Latency
 menu.show_status_icon: Show Status Icon
 menu.daily_ip_log: Record Daily Public IP Log
+menu.daily_ip_log_menu: Daily IP Log
+menu.menu_bar: Menu Bar
 menu.daily_ip_log_include_vpn_addresses: Record VPN Addresses
 menu.change_daily_ip_log_directory: Change Log Output Folder…
 menu.mute_session: Mute for This Session
@@ -16,7 +18,16 @@ menu.quit: Quit
 menu.latency_mode: Latency Mode
 status.current_ip: "Current public IP: %{ip}"
 status.last_success_ip: "Last public IP: %{ip}"
+status.copy_current_ip: "Copy Current IP: %{ip}"
+status.copy_last_ip: "Copy Last IP: %{ip}"
 status.expected_ip: "Expected IP: %{ip}"
+status.label: Status
+status.matches: Matches expected
+status.mismatch: Does not match expected
+status.not_configured: Expected IP not set
+status.unreachable: Unable to check
+status.checked: "Checked %{time}"
+status.muted: Muted
 status.unknown: Unknown
 status.unset: Not set
 status.tooltip: "Current: %{current} | Expected: %{expected}"

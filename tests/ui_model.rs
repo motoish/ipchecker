@@ -1,5 +1,6 @@
 use std::net::Ipv4Addr;
 
+use chrono::{Local, TimeZone};
 use ipchecker::{
     config::Config,
     monitor::{Monitor, MonitorOutcome, MonitorState},
@@ -52,7 +53,7 @@ fn pixel_alpha(rgba: &[u8], x: u32, y: u32) -> u8 {
 }
 
 #[test]
-fn template_icons_use_filled_disc_with_carved_glyphs() {
+fn template_icons_use_distinct_silhouettes_with_carved_glyphs() {
     let normal = icon_rgba_for_state(IconState::Normal);
     let alert = icon_rgba_for_state(IconState::Alert);
     let unknown = icon_rgba_for_state(IconState::Unknown);
@@ -61,12 +62,16 @@ fn template_icons_use_filled_disc_with_carved_glyphs() {
     assert_eq!(alert.len(), 36 * 36 * 4);
     assert_eq!(unknown.len(), 36 * 36 * 4);
 
-    // Filled disc interior away from glyphs stays opaque.
+    // Silhouette interiors away from glyphs stay opaque.
     assert!(pixel_alpha(&normal, 8, 18) > 200);
-    assert!(pixel_alpha(&alert, 8, 18) > 200);
+    assert!(pixel_alpha(&alert, 10, 25) > 200);
     assert!(pixel_alpha(&unknown, 8, 18) > 200);
 
-    // Outside the disc stays transparent.
+    // The warning triangle does not fill the disc's upper-left corner.
+    assert_eq!(pixel_alpha(&alert, 8, 10), 0);
+    assert!(pixel_alpha(&normal, 8, 10) > 200);
+
+    // Outside the icon stays transparent.
     assert_eq!(pixel_alpha(&normal, 1, 1), 0);
 
     // Antialiased edge should produce partial-alpha pixels.
@@ -98,10 +103,10 @@ fn template_icon_disc_avoids_faint_outer_halo_pixels() {
 }
 
 #[test]
-fn glyph_shapes_are_knocked_out_of_the_filled_disc() {
+fn glyph_shapes_are_knocked_out_of_the_silhouettes() {
     let alert = icon_rgba_for_state(IconState::Alert);
 
-    // X diagonals meet at the center; that core should be carved transparent.
+    // The warning bar runs through the center and is carved transparent.
     assert!(
         pixel_alpha(&alert, 18, 18) < 40,
         "glyph knockout should clear the core, got alpha {}",
@@ -110,11 +115,34 @@ fn glyph_shapes_are_knocked_out_of_the_filled_disc() {
 }
 
 #[test]
+fn warning_glyph_is_horizontally_centered() {
+    let alert = icon_rgba_for_state(IconState::Alert);
+
+    for y in 14..=20 {
+        let opaque: Vec<u32> = (0..36)
+            .filter(|x| pixel_alpha(&alert, *x, y) > 128)
+            .collect();
+        let left = *opaque.first().expect("triangle row should have ink");
+        let right = *opaque.last().expect("triangle row should have ink");
+        let holes: Vec<u32> = (left..=right)
+            .filter(|x| pixel_alpha(&alert, *x, y) < 40)
+            .collect();
+        assert!(!holes.is_empty(), "row {y} should contain the carved bar");
+
+        let center = (holes.first().unwrap() + holes.last().unwrap()) as f32 / 2.0;
+        assert!(
+            (center - 17.5).abs() <= 0.5,
+            "warning bar is off-center on row {y}: {center}"
+        );
+    }
+}
+
+#[test]
 fn unknown_with_last_success_labels_the_address_as_stale() {
     rust_i18n::set_locale("zh-CN");
     let model = model_for(MonitorState::Unknown, Some(ip("192.0.2.1")), None, false);
 
-    assert_eq!(model.current_title, "上次公网 IP：192.0.2.1");
+    assert_eq!(model.current_title, "复制上次公网 IP：192.0.2.1");
     assert_eq!(model.tooltip, "上次: 192.0.2.1 | 期望: 未设置");
     assert_eq!(model.icon_state, IconState::Unknown);
     assert!(!model.can_use_current_ip);
@@ -130,7 +158,59 @@ fn current_ip_row_is_copyable_only_when_an_address_is_known() {
 
     let with_ip = model_for(MonitorState::Unknown, Some(ip("192.0.2.1")), None, false);
     assert!(with_ip.can_copy_current_ip);
-    assert_eq!(with_ip.current_title, "上次公网 IP：192.0.2.1");
+    assert_eq!(with_ip.current_title, "复制上次公网 IP：192.0.2.1");
+}
+
+#[test]
+fn unconfigured_expected_ip_uses_the_hollow_icon_and_status() {
+    rust_i18n::set_locale("zh-CN");
+    let model = model_for(
+        MonitorState::Unconfigured,
+        Some(ip("192.0.2.1")),
+        None,
+        false,
+    );
+
+    assert_eq!(model.icon_state, IconState::Unconfigured);
+    assert_eq!(model.current_title, "复制当前公网 IP：192.0.2.1");
+    assert_eq!(model.status_title, "状态: 未设置期望 IP");
+    assert!(model.accessibility_label.contains("当前公网 IP：192.0.2.1"));
+    assert!(model.accessibility_label.contains("未设置期望 IP"));
+}
+
+#[test]
+fn status_line_includes_check_time_and_mute_state() {
+    rust_i18n::set_locale("zh-CN");
+    let config = Config::default();
+    let mut session = Session::new();
+    session.set_muted(true);
+    let outcome = MonitorOutcome {
+        state: MonitorState::Mismatched,
+        current_ip: Some(ip("192.0.2.1")),
+        last_success_ip: Some(ip("192.0.2.1")),
+        notification: None,
+    };
+    let checked_at = Local
+        .with_ymd_and_hms(2026, 9, 13, 12, 34, 0)
+        .single()
+        .expect("local time should resolve");
+
+    let model = UiModel::from_state_with_check_time(&config, &session, &outcome, Some(checked_at));
+
+    assert_eq!(
+        model.status_title,
+        "状态: 与期望 IP 不一致 · 12:34 检查 · 已静音"
+    );
+    assert!(model.accessibility_label.contains("已静音"));
+}
+
+#[test]
+fn unconfigured_icon_is_a_hollow_ring() {
+    let unconfigured = icon_rgba_for_state(IconState::Unconfigured);
+
+    assert_eq!(pixel_alpha(&unconfigured, 18, 18), 0);
+    assert!(pixel_alpha(&unconfigured, 18, 5) > 200);
+    assert_ne!(unconfigured, icon_rgba_for_state(IconState::Normal));
 }
 
 #[test]

@@ -3,7 +3,7 @@ mod macos {
     use std::{net::Ipv4Addr, thread, time::Duration};
 
     use arboard::Clipboard;
-    use chrono::Local;
+    use chrono::{DateTime, Local};
     use ipchecker::{
         about::{apply_application_icon, show_about},
         app::{
@@ -143,6 +143,7 @@ mod macos {
         session: Session,
         monitor: Monitor,
         outcome: MonitorOutcome,
+        last_checked_at: Option<DateTime<Local>>,
         tray_ui: Option<TrayUi>,
         notifications: NotificationService,
         updates: UpdateCoordinator,
@@ -172,6 +173,7 @@ mod macos {
                     last_success_ip: None,
                     notification: None,
                 },
+                last_checked_at: None,
                 tray_ui: None,
                 notifications: NotificationService::default(),
                 updates: UpdateCoordinator::default(),
@@ -231,16 +233,14 @@ mod macos {
             match event {
                 UserEvent::Worker(WorkerEvent::FetchCompleted { result, vpn_status }) => {
                     let successful_ip = result.as_ref().ok().copied();
+                    self.last_checked_at = Some(Local::now());
                     let outcome = self.monitor.apply(
                         result,
                         self.config.expected_ip,
                         self.session.is_muted(),
                     );
-                    self.notifications.observe(
-                        outcome.notification.clone(),
-                        self.session.is_muted(),
-                        self.config.is_show_status_icon,
-                    );
+                    self.notifications
+                        .observe(outcome.notification.clone(), self.session.is_muted());
                     self.outcome = outcome;
                     self.apply_ui();
                     self.deliver_pending_notification();
@@ -408,8 +408,7 @@ mod macos {
         fn set_muted(&mut self, muted: bool) {
             self.session.set_muted(muted);
             if muted {
-                self.notifications
-                    .observe(None, true, self.config.is_show_status_icon);
+                self.notifications.observe(None, true);
             }
             self.apply_ui();
         }
@@ -439,9 +438,6 @@ mod macos {
             if !self.save_candidate(candidate) {
                 self.apply_ui();
                 return;
-            }
-            if field == TrayDisplayField::StatusIcon && !enabled {
-                self.notifications.clear_on_status_icon_hidden();
             }
             if field == TrayDisplayField::NetworkSpeed {
                 self.speed_labels =
@@ -584,16 +580,14 @@ mod macos {
         }
 
         fn recompare_expected_and_check(&mut self) {
-            self.notifications
-                .observe(None, false, self.config.is_show_status_icon);
+            self.notifications.observe(None, false);
             self.outcome = self.outcome.recompare_expected(self.config.expected_ip);
             self.apply_ui();
             self.send_worker_command(WorkerCommand::CheckNow);
         }
 
         fn finish_notifier_bootstrap(&mut self, result: Result<MacNotifier, String>) {
-            self.notifications
-                .finish_bootstrap(result, self.config.is_show_status_icon);
+            self.notifications.finish_bootstrap(result);
             self.deliver_pending_notification();
         }
 
@@ -614,7 +608,12 @@ mod macos {
         }
 
         fn ui_model(&self) -> UiModel {
-            UiModel::from_state(&self.config, &self.session, &self.outcome)
+            UiModel::from_state_with_check_time(
+                &self.config,
+                &self.session,
+                &self.outcome,
+                self.last_checked_at,
+            )
         }
 
         fn apply_ui(&mut self) {

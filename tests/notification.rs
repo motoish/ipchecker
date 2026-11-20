@@ -19,8 +19,8 @@ fn repeated_pending_fetch_failure_is_not_cleared_before_delivery() {
     let mut coordinator = NotificationCoordinator::default();
     let decision = NotificationDecision::FetchFailure;
 
-    coordinator.observe(Some(decision.clone()), false, true);
-    coordinator.observe(Some(decision.clone()), false, true);
+    coordinator.observe(Some(decision.clone()), false);
+    coordinator.observe(Some(decision.clone()), false);
 
     assert_eq!(coordinator.pending(), Some(decision));
 }
@@ -30,13 +30,13 @@ fn delivered_fetch_failure_is_suppressed_until_the_episode_changes() {
     let mut coordinator = NotificationCoordinator::default();
     let failure = NotificationDecision::FetchFailure;
 
-    coordinator.observe(Some(failure.clone()), false, true);
+    coordinator.observe(Some(failure.clone()), false);
     coordinator.mark_delivered(&failure);
-    coordinator.observe(Some(failure), false, true);
+    coordinator.observe(Some(failure), false);
     assert_eq!(coordinator.pending(), None);
 
-    coordinator.observe(None, false, true);
-    coordinator.observe(Some(NotificationDecision::FetchFailure), false, true);
+    coordinator.observe(None, false);
+    coordinator.observe(Some(NotificationDecision::FetchFailure), false);
     assert_eq!(
         coordinator.pending(),
         Some(NotificationDecision::FetchFailure)
@@ -51,57 +51,20 @@ fn delivered_mismatch_is_rearmed_on_each_poll() {
         expected: ip("192.0.2.2"),
     };
 
-    coordinator.observe(Some(mismatch.clone()), false, true);
+    coordinator.observe(Some(mismatch.clone()), false);
     coordinator.mark_delivered(&mismatch);
     assert_eq!(coordinator.pending(), None);
 
-    coordinator.observe(Some(mismatch.clone()), false, true);
+    coordinator.observe(Some(mismatch.clone()), false);
     assert_eq!(coordinator.pending(), Some(mismatch));
-}
-
-#[test]
-fn hidden_status_icon_suppresses_mismatch_notifications() {
-    let mut coordinator = NotificationCoordinator::default();
-    let mismatch = NotificationDecision::Mismatch {
-        current: ip("192.0.2.1"),
-        expected: ip("192.0.2.2"),
-    };
-
-    coordinator.observe(Some(mismatch), false, false);
-
-    assert_eq!(coordinator.pending(), None);
-}
-
-#[test]
-fn hidden_status_icon_suppresses_fetch_failure_notifications() {
-    let mut coordinator = NotificationCoordinator::default();
-
-    coordinator.observe(Some(NotificationDecision::FetchFailure), false, false);
-
-    assert_eq!(coordinator.pending(), None);
-}
-
-#[test]
-fn hiding_status_icon_clears_a_pending_notification() {
-    let mut coordinator = NotificationCoordinator::default();
-    let mismatch = NotificationDecision::Mismatch {
-        current: ip("192.0.2.1"),
-        expected: ip("192.0.2.2"),
-    };
-
-    coordinator.observe(Some(mismatch), false, true);
-    assert!(coordinator.pending().is_some());
-
-    coordinator.observe(None, false, false);
-    assert_eq!(coordinator.pending(), None);
 }
 
 #[test]
 fn muting_clears_the_active_notification_episode() {
     let mut coordinator = NotificationCoordinator::default();
-    coordinator.observe(Some(NotificationDecision::FetchFailure), false, true);
+    coordinator.observe(Some(NotificationDecision::FetchFailure), false);
 
-    coordinator.observe(Some(NotificationDecision::FetchFailure), true, true);
+    coordinator.observe(Some(NotificationDecision::FetchFailure), true);
 
     assert_eq!(coordinator.pending(), None);
 }

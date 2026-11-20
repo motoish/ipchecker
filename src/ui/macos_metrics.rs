@@ -13,7 +13,7 @@ use objc2::runtime::AnyObject;
 use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{
-    NSAttributedStringNSStringDrawing, NSBezierPath, NSCellImagePosition, NSColor,
+    NSAccessibility, NSAttributedStringNSStringDrawing, NSBezierPath, NSCellImagePosition, NSColor,
     NSCompositingOperation, NSFont, NSFontAttributeName, NSFontWeightRegular,
     NSForegroundColorAttributeName, NSImage, NSMutableParagraphStyle,
     NSParagraphStyleAttributeName, NSRectFill, NSTextAlignment, NSTextTab, NSTextTabOptionKey,
@@ -37,15 +37,16 @@ struct TrayMetricsVisibility {
 const TRAY_ICON_POINTS: f64 = 18.0;
 #[cfg(target_os = "macos")]
 const TRAY_ICON_TEXT_GAP: f64 = 2.0;
-/// Extra points after measured content so multi-display scale rounding
-/// cannot clip the trailing unit character (e.g. the "s" in "KB/s").
+/// Horizontal padding inside the status item, matching native menu-bar items.
 #[cfg(target_os = "macos")]
-const TRAY_TRAILING_PAD: f64 = 2.0;
+const TRAY_LEADING_INSET: f64 = 4.0;
+#[cfg(target_os = "macos")]
+const TRAY_TRAILING_INSET: f64 = 4.0;
 /// Match iStat Menus menu-bar metrics (~9pt).
 #[cfg(target_os = "macos")]
 const SPEED_FONT_SIZE: f64 = 9.0;
 #[cfg(target_os = "macos")]
-const SPEED_LINE_HEIGHT: f64 = 10.0;
+const SPEED_LINE_HEIGHT: f64 = 10.5;
 /// Nudge the metrics stack down in the non-flipped menu-bar view
 /// (lower y = toward the bottom of the bar).
 #[cfg(target_os = "macos")]
@@ -106,7 +107,7 @@ define_class!(
             let stack_y =
                 ((bounds.size.height - stack_height) / 2.0 - TRAY_METRICS_Y_NUDGE).round();
             let icon_y = (stack_y + (stack_height - icon_size.height) / 2.0).round();
-            let mut x = 0.0;
+            let mut x = TRAY_LEADING_INSET;
             let mut latency_dot_rect = None;
             let mut latency_text_point = None;
             if is_show_network_latency && latency_column_width > 0.0 && latency_size.width > 0.0 {
@@ -273,6 +274,21 @@ pub(crate) fn install_speed_title_view(tray: &TrayIcon) -> Retained<SpeedTitleVi
 }
 
 #[cfg(target_os = "macos")]
+pub(crate) fn set_tray_accessibility_label(tray: &TrayIcon, label: &str) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        log::warn!("skipped tray accessibility label; not on the main thread");
+        return;
+    };
+    let Some(status_item) = tray.ns_status_item() else {
+        return;
+    };
+    let Some(button) = status_item.button(mtm) else {
+        return;
+    };
+    button.setAccessibilityLabel(Some(&NSString::from_str(label)));
+}
+
+#[cfg(target_os = "macos")]
 pub(crate) fn set_tray_speed_title(
     tray: &TrayIcon,
     view: &SpeedTitleView,
@@ -366,12 +382,16 @@ pub(crate) fn set_tray_speed_title(
         content_width += speed_width;
     }
     // Do not shrink below measured content: an earlier trailing trim clipped
-    // "KB/s" on external displays with a different backing scale.
-    let width = (content_width + TRAY_TRAILING_PAD).max(if is_show_status_icon {
-        icon_size.width
-    } else {
-        0.0
-    });
+    // "KB/s" on external displays with a different backing scale. The trailing
+    // inset also keeps the status item's background clear of the last glyph.
+    let minimum_width = TRAY_LEADING_INSET
+        + if is_show_status_icon {
+            icon_size.width
+        } else {
+            0.0
+        }
+        + TRAY_TRAILING_INSET;
+    let width = (TRAY_LEADING_INSET + content_width + TRAY_TRAILING_INSET).max(minimum_width);
     status_item.setLength(width);
     view.set_speed_labels(
         speed_attributed,
@@ -463,7 +483,8 @@ fn speed_paragraph_style(font: &NSFont, title: &str) -> Retained<NSMutableParagr
     let arrow_width = font_width("↑", font).max(font_width("↓", font));
     let number_width = title_number_width(title, font);
     let gap = font_width(" ", font);
-    let number_tab_x = arrow_width + number_width;
+    // Reserve the separator space so the widest value does not touch the arrow.
+    let number_tab_x = arrow_width + gap + number_width;
     let unit_width = ["KB/s", "MB/s", "GB/s"]
         .into_iter()
         .map(|unit| font_width(unit, font))
@@ -547,6 +568,25 @@ mod tests {
         let width_range = widths.iter().copied().fold(f64::MIN, f64::max)
             - widths.iter().copied().fold(f64::MAX, f64::min);
         assert!(width_range < 0.01, "speed units differ by {width_range}pt");
+    }
+
+    #[test]
+    fn speed_number_tab_leaves_room_after_the_arrow() {
+        let font = NSFont::monospacedDigitSystemFontOfSize_weight(SPEED_FONT_SIZE, unsafe {
+            NSFontWeightRegular
+        });
+        let paragraph = speed_paragraph_style(&font, "↑\t99.9\tMB/s");
+        let tabs = paragraph.tabStops();
+        let number_tab = tabs.objectAtIndex(0);
+        let arrow_width = font_width("↑", &font).max(font_width("↓", &font));
+        let space_width = font_width(" ", &font);
+
+        assert!(
+            number_tab.location() > arrow_width + space_width,
+            "number tab at {}pt leaves no gap after the {}pt arrow",
+            number_tab.location(),
+            arrow_width
+        );
     }
 
     #[test]

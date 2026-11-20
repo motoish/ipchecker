@@ -10,7 +10,9 @@ use super::icon::IconSet;
 use super::model::{MenuAction, UiModel};
 
 #[cfg(target_os = "macos")]
-use super::macos_metrics::{SpeedTitleView, install_speed_title_view, set_tray_speed_title};
+use super::macos_metrics::{
+    SpeedTitleView, install_speed_title_view, set_tray_accessibility_label, set_tray_speed_title,
+};
 #[cfg(target_os = "macos")]
 use objc2::rc::Retained;
 
@@ -25,6 +27,7 @@ pub struct TrayUi {
     latency_items: [(LatencyMode, CheckMenuItem); 2],
     current_item: MenuItem,
     expected_item: MenuItem,
+    status_item: MenuItem,
     set_expected_from_input_item: MenuItem,
     use_current_ip_item: MenuItem,
     interval_items: [IntervalMenuItem; 5],
@@ -47,14 +50,7 @@ pub struct TrayUi {
 impl TrayUi {
     pub fn new(model: &UiModel) -> Result<Self, UiError> {
         let menu = Menu::new();
-        let latency_menu = Submenu::new(
-            format!(
-                "{}: {}",
-                t!("menu.latency_mode"),
-                model.latency_mode.menu_label()
-            ),
-            true,
-        );
+        let latency_menu = Submenu::new(t!("menu.latency_mode").as_ref(), true);
         let latency_items = [LatencyMode::Icmp, LatencyMode::Tcp].map(|mode| {
             (
                 mode,
@@ -67,6 +63,7 @@ impl TrayUi {
 
         let current_item = MenuItem::new(&model.current_title, model.can_copy_current_ip, None);
         let expected_item = MenuItem::new(&model.expected_title, false, None);
+        let status_item = MenuItem::new(&model.status_title, false, None);
         let set_expected_from_input_item =
             MenuItem::new(t!("menu.set_expected").as_ref(), true, None);
         let use_current_ip_item = MenuItem::new(
@@ -137,9 +134,24 @@ impl TrayUi {
             PredefinedMenuItem::separator(),
         ];
 
+        let menu_bar_menu = Submenu::new(t!("menu.menu_bar").as_ref(), true);
+        menu_bar_menu.append_items(&[
+            &show_network_speed_item,
+            &show_network_latency_item,
+            &latency_menu,
+            &show_status_icon_item,
+        ])?;
+        let daily_ip_log_menu = Submenu::new(t!("menu.daily_ip_log_menu").as_ref(), true);
+        daily_ip_log_menu.append_items(&[
+            &daily_ip_log_item,
+            &daily_ip_log_include_vpn_addresses_item,
+            &change_daily_ip_log_directory_item,
+        ])?;
+
         menu.append_items(&[
             &current_item,
             &expected_item,
+            &status_item,
             &separators[0],
             &set_expected_from_input_item,
             &use_current_ip_item,
@@ -147,13 +159,8 @@ impl TrayUi {
             &interval_menu,
             &check_now_item,
             &separators[2],
-            &show_network_speed_item,
-            &show_network_latency_item,
-            &latency_menu,
-            &show_status_icon_item,
-            &daily_ip_log_item,
-            &daily_ip_log_include_vpn_addresses_item,
-            &change_daily_ip_log_directory_item,
+            &menu_bar_menu,
+            &daily_ip_log_menu,
             &mute_item,
             &separators[3],
             &check_for_updates_item,
@@ -178,6 +185,7 @@ impl TrayUi {
             latency_items,
             current_item,
             expected_item,
+            status_item,
             set_expected_from_input_item,
             use_current_ip_item,
             interval_items,
@@ -202,21 +210,20 @@ impl TrayUi {
             model.is_show_network_latency,
             model.is_show_status_icon,
         );
+        #[cfg(target_os = "macos")]
+        set_tray_accessibility_label(&ui.tray, &model.accessibility_label);
         Ok(ui)
     }
 
     pub fn apply(&self, model: &UiModel) -> Result<(), UiError> {
-        self.latency_menu.set_text(format!(
-            "{}: {}",
-            t!("menu.latency_mode"),
-            model.latency_mode.menu_label()
-        ));
         for (mode, item) in &self.latency_items {
             item.set_checked(*mode == model.latency_mode);
         }
+        self.latency_menu.set_enabled(model.is_show_network_latency);
         self.current_item.set_text(&model.current_title);
         self.current_item.set_enabled(model.can_copy_current_ip);
         self.expected_item.set_text(&model.expected_title);
+        self.status_item.set_text(&model.status_title);
         self.use_current_ip_item
             .set_enabled(model.can_use_current_ip);
         for interval in &self.interval_items {
@@ -240,12 +247,18 @@ impl TrayUi {
             .set_checked(model.is_daily_ip_log_enabled);
         self.daily_ip_log_include_vpn_addresses_item
             .set_checked(model.include_vpn_addresses_in_daily_ip_log);
+        self.daily_ip_log_include_vpn_addresses_item
+            .set_enabled(model.is_daily_ip_log_enabled);
+        self.change_daily_ip_log_directory_item
+            .set_enabled(model.is_daily_ip_log_enabled);
         self.mute_item.set_checked(model.muted);
         self.tray.set_tooltip(Some(&model.tooltip))?;
         self.tray.set_icon_with_as_template(
             Some(self.icons.for_state(model.icon_state).clone()),
             true,
         )?;
+        #[cfg(target_os = "macos")]
+        set_tray_accessibility_label(&self.tray, &model.accessibility_label);
         Ok(())
     }
 

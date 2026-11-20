@@ -13,8 +13,8 @@ use ipchecker::net_latency::{
 fn formats_latency_for_tray_leading_column() {
     assert_eq!(format_latency(42), "42 ms");
     assert_eq!(format_latency(150), "150 ms");
-    assert_eq!(format_latency(300), "?");
-    assert_eq!(format_unknown_latency(), "?");
+    assert_eq!(format_latency(300), "300 ms");
+    assert_eq!(format_unknown_latency(), "—");
 }
 
 #[test]
@@ -30,10 +30,11 @@ fn latency_level_thresholds_match_recommended_bands() {
 fn four_digit_latency_fits_tray_column_template() {
     use ipchecker::net_speed::TRAY_LATENCY_WIDTH_TEMPLATE;
 
-    assert_eq!(format_latency(999), "?");
+    assert_eq!(format_latency(999), "999 ms");
+    assert_eq!(format_latency(2000), "2000 ms");
     assert_eq!(LatencyDisplay::from_millis(250).text, "250 ms");
     assert_eq!(TRAY_LATENCY_WIDTH_TEMPLATE, "9999 ms");
-    assert!(LatencyDisplay::from_millis(250).text.len() <= TRAY_LATENCY_WIDTH_TEMPLATE.len());
+    assert!(LatencyDisplay::from_millis(2000).text.len() <= TRAY_LATENCY_WIDTH_TEMPLATE.len());
 }
 
 #[test]
@@ -82,7 +83,7 @@ fn medium_and_high_latency_use_status_display() {
         LatencyDisplay::from_millis(300),
         LatencyDisplay {
             level: LatencyLevel::High,
-            text: "?".into(),
+            text: "300 ms".into(),
         }
     );
 
@@ -93,7 +94,7 @@ fn medium_and_high_latency_use_status_display() {
         sampler.observe(Some(300)),
         &LatencyDisplay {
             level: LatencyLevel::High,
-            text: "?".into(),
+            text: "300 ms".into(),
         }
     );
 }

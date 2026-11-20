@@ -276,16 +276,14 @@ fn product_preview_contains_the_real_menu_items() {
         .expect("docs/pages/index.html should be a deployable entrypoint");
 
     for label in [
+        "Copy Current IP",
+        "Status:",
         "Set Expected IP...",
         "Use Current Public IP",
         "Check Interval",
         "Check Now",
-        "Show Network Speed",
-        "Show Network Latency",
-        "Show Status Icon",
-        "Record Daily Public IP Log",
-        "Record VPN Addresses",
-        "Change Log Output Folder...",
+        "Menu Bar",
+        "Daily IP Log",
         "Mute for This Session",
         "Check for Updates...",
         "About ipchecker...",

@@ -1,3 +1,5 @@
+use chrono::{DateTime, Local};
+
 use crate::net_latency::LatencyMode;
 use crate::{
     config::Config,
@@ -10,6 +12,7 @@ pub enum IconState {
     Normal,
     Alert,
     Unknown,
+    Unconfigured,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,6 +20,8 @@ pub struct UiModel {
     pub latency_mode: LatencyMode,
     pub current_title: String,
     pub expected_title: String,
+    pub status_title: String,
+    pub accessibility_label: String,
     pub can_use_current_ip: bool,
     pub can_copy_current_ip: bool,
     pub interval_minutes: u64,
@@ -35,45 +40,81 @@ pub struct UiModel {
 
 impl UiModel {
     pub fn from_state(config: &Config, session: &Session, outcome: &MonitorOutcome) -> Self {
+        Self::from_state_with_check_time(config, session, outcome, None)
+    }
+
+    pub fn from_state_with_check_time(
+        config: &Config,
+        session: &Session,
+        outcome: &MonitorOutcome,
+        last_checked: Option<DateTime<Local>>,
+    ) -> Self {
         let display_ip = outcome.current_ip.or(outcome.last_success_ip);
         let expected_value = config
             .expected_ip
             .map(|ip| ip.to_string())
             .unwrap_or_else(|| t!("status.unset").to_string());
-        let (current_title, tooltip) = match (outcome.current_ip, outcome.last_success_ip) {
+        let (current_ip_label, current_title) = match (outcome.current_ip, outcome.last_success_ip)
+        {
             (Some(current), _) => (
                 t!("status.current_ip", ip = current).to_string(),
-                t!(
-                    "status.tooltip",
-                    current = current,
-                    expected = expected_value
-                )
-                .to_string(),
+                t!("status.copy_current_ip", ip = current).to_string(),
             ),
             (None, Some(last_success)) => (
                 t!("status.last_success_ip", ip = last_success).to_string(),
-                t!(
-                    "status.tooltip_last",
-                    current = last_success,
-                    expected = expected_value
-                )
-                .to_string(),
+                t!("status.copy_last_ip", ip = last_success).to_string(),
             ),
-            (None, None) => (
-                t!("status.current_ip", ip = t!("status.unknown")).to_string(),
-                t!("status.tooltip", current = "—", expected = expected_value).to_string(),
-            ),
+            (None, None) => {
+                let label = t!("status.current_ip", ip = t!("status.unknown")).to_string();
+                (label.clone(), label)
+            }
         };
+        let tooltip = match (outcome.current_ip, outcome.last_success_ip) {
+            (Some(current), _) => t!(
+                "status.tooltip",
+                current = current,
+                expected = expected_value
+            )
+            .to_string(),
+            (None, Some(last_success)) => t!(
+                "status.tooltip_last",
+                current = last_success,
+                expected = expected_value
+            )
+            .to_string(),
+            (None, None) => {
+                t!("status.tooltip", current = "—", expected = expected_value).to_string()
+            }
+        };
+        let expected_title = t!("status.expected_ip", ip = expected_value).to_string();
+        let status_value = match outcome.state {
+            MonitorState::Matched => t!("status.matches"),
+            MonitorState::Mismatched => t!("status.mismatch"),
+            MonitorState::Unknown => t!("status.unreachable"),
+            MonitorState::Unconfigured => t!("status.not_configured"),
+        };
+        let mut status_title = format!("{}: {}", t!("status.label"), status_value);
+        if let Some(checked_at) = last_checked {
+            let time = checked_at.format("%H:%M").to_string();
+            status_title.push_str(&format!(" · {}", t!("status.checked", time = time)));
+        }
+        if session.is_muted() {
+            status_title.push_str(&format!(" · {}", t!("status.muted")));
+        }
         let icon_state = match outcome.state {
-            MonitorState::Matched | MonitorState::Unconfigured => IconState::Normal,
+            MonitorState::Matched => IconState::Normal,
             MonitorState::Mismatched => IconState::Alert,
             MonitorState::Unknown => IconState::Unknown,
+            MonitorState::Unconfigured => IconState::Unconfigured,
         };
+        let accessibility_label = format!("{current_ip_label}. {expected_title}. {status_title}");
 
         Self {
             latency_mode: config.latency_mode,
             current_title,
-            expected_title: t!("status.expected_ip", ip = expected_value).to_string(),
+            expected_title,
+            status_title,
+            accessibility_label,
             can_use_current_ip: outcome.current_ip.is_some(),
             can_copy_current_ip: display_ip.is_some(),
             interval_minutes: config.interval_minutes,

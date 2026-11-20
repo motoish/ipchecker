@@ -7,6 +7,8 @@ menu.show_network_speed: 通信速度を表示
 menu.show_network_latency: ネットワーク遅延を表示
 menu.show_status_icon: ステータスアイコンを表示
 menu.daily_ip_log: 毎日のグローバル IP を記録
+menu.daily_ip_log_menu: 毎日の IP ログ
+menu.menu_bar: メニューバー
 menu.daily_ip_log_include_vpn_addresses: VPN アドレスを記録
 menu.change_daily_ip_log_directory: ログの出力フォルダを変更…
 menu.mute_session: このセッションでは通知しない
@@ -16,7 +18,16 @@ menu.quit: 終了
 menu.latency_mode: 遅延測定モード
 status.current_ip: "現在のグローバルIP：%{ip}"
 status.last_success_ip: "前回のグローバルIP：%{ip}"
+status.copy_current_ip: "現在のグローバルIPをコピー：%{ip}"
+status.copy_last_ip: "前回のグローバルIPをコピー：%{ip}"
 status.expected_ip: "期待IP：%{ip}"
+status.label: ステータス
+status.matches: 期待IPと一致
+status.mismatch: 期待IPと不一致
+status.not_configured: 期待IPが未設定
+status.unreachable: 確認できません
+status.checked: "%{time} に確認"
+status.muted: ミュート中
 status.unknown: 不明
 status.unset: 未設定
 status.tooltip: "現在: %{current} | 期待: %{expected}"

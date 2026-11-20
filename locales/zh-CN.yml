@@ -7,6 +7,8 @@ menu.show_network_speed: 显示上下行速度
 menu.show_network_latency: 显示网络延迟
 menu.show_status_icon: 显示状态图标
 menu.daily_ip_log: 记录每日公网 IP
+menu.daily_ip_log_menu: 每日 IP 日志
+menu.menu_bar: 菜单栏
 menu.daily_ip_log_include_vpn_addresses: 记录 VPN 地址
 menu.change_daily_ip_log_directory: 更改日志输出文件夹…
 menu.mute_session: 本会话不再提醒
@@ -16,7 +18,16 @@ menu.quit: 退出
 menu.latency_mode: 延迟测量模式
 status.current_ip: "当前公网 IP：%{ip}"
 status.last_success_ip: "上次公网 IP：%{ip}"
+status.copy_current_ip: "复制当前公网 IP：%{ip}"
+status.copy_last_ip: "复制上次公网 IP：%{ip}"
 status.expected_ip: "期望 IP：%{ip}"
+status.label: 状态
+status.matches: 与期望 IP 一致
+status.mismatch: 与期望 IP 不一致
+status.not_configured: 未设置期望 IP
+status.unreachable: 无法获取公网 IP
+status.checked: "%{time} 检查"
+status.muted: 已静音
 status.unknown: 未知
 status.unset: 未设置
 status.tooltip: "当前: %{current} | 期望: %{expected}"

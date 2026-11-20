@@ -76,8 +76,9 @@
           </div>
           <div class="app-menu">
             <div class="app-menu-info">
-              <div><span>Current public IP:</span> <strong>203.0.113.10</strong></div>
+              <div><span>Copy Current IP:</span> <strong>203.0.113.10</strong></div>
               <div class="muted"><span>Expected IP:</span> <strong>203.0.113.10</strong></div>
+              <div class="muted"><span>Status:</span> <strong>Matches expected</strong></div>
             </div>
             <div class="menu-separator"></div>
             <div class="app-menu-item">Set Expected IP...</div>
@@ -86,12 +87,8 @@
             <div class="app-menu-item has-chevron">Check Interval</div>
             <div class="app-menu-item">Check Now</div>
             <div class="menu-separator"></div>
-            <div class="app-menu-item is-checked">Show Network Speed</div>
-            <div class="app-menu-item is-checked">Show Network Latency</div>
-            <div class="app-menu-item is-checked">Show Status Icon</div>
-            <div class="app-menu-item is-checked">Record Daily Public IP Log</div>
-            <div class="app-menu-item is-checked">Record VPN Addresses</div>
-            <div class="app-menu-item">Change Log Output Folder...</div>
+            <div class="app-menu-item has-chevron">Menu Bar</div>
+            <div class="app-menu-item has-chevron">Daily IP Log</div>
             <div class="app-menu-item">Mute for This Session</div>
             <div class="menu-separator"></div>
             <div class="app-menu-item">Check for Updates...</div>
@@ -229,7 +226,7 @@
           </details>
           <details>
             <summary>Does daily logging record VPN addresses?</summary>
-            <p>It does by default. Turn off Record VPN Addresses to skip future observations while a supported active tunnel carries IPv4 routes.</p>
+            <p>It does by default. Turn off Record VPN Addresses in the Daily IP Log submenu to skip future observations while a supported active tunnel carries IPv4 routes.</p>
           </details>
           <details>
             <summary>Where is configuration stored?</summary>

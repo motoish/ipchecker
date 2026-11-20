@@ -7,6 +7,8 @@ menu.show_network_speed: Показывать скорость сети
 menu.show_network_latency: Показывать задержку сети
 menu.show_status_icon: Показывать значок состояния
 menu.daily_ip_log: Записывать ежедневный публичный IP
+menu.daily_ip_log_menu: Журнал IP за день
+menu.menu_bar: Строка меню
 menu.daily_ip_log_include_vpn_addresses: Записывать VPN-адреса
 menu.change_daily_ip_log_directory: Изменить папку журнала…
 menu.mute_session: Не уведомлять в этой сессии
@@ -16,7 +18,16 @@ menu.quit: Выход
 menu.latency_mode: Режим измерения задержки
 status.current_ip: "Текущий публичный IP: %{ip}"
 status.last_success_ip: "Последний публичный IP: %{ip}"
+status.copy_current_ip: "Копировать текущий публичный IP: %{ip}"
+status.copy_last_ip: "Копировать последний публичный IP: %{ip}"
 status.expected_ip: "Ожидаемый IP: %{ip}"
+status.label: Состояние
+status.matches: Совпадает с ожидаемым
+status.mismatch: Не совпадает с ожидаемым
+status.not_configured: Ожидаемый IP не задан
+status.unreachable: Не удалось проверить
+status.checked: "Проверено в %{time}"
+status.muted: Без уведомлений
 status.unknown: Неизвестно
 status.unset: Не задан
 status.tooltip: "Текущий: %{current} | Ожидаемый: %{expected}"

@@ -21,13 +21,8 @@ pub struct NotificationCoordinator {
 }
 
 impl NotificationCoordinator {
-    pub fn observe(
-        &mut self,
-        decision: Option<NotificationDecision>,
-        muted: bool,
-        is_show_status_icon: bool,
-    ) {
-        if muted || !is_show_status_icon {
+    pub fn observe(&mut self, decision: Option<NotificationDecision>, muted: bool) {
+        if muted {
             self.active = None;
             self.delivered = false;
             return;
@@ -63,17 +58,8 @@ pub struct NotificationService {
 }
 
 impl NotificationService {
-    pub fn observe(
-        &mut self,
-        decision: Option<NotificationDecision>,
-        muted: bool,
-        is_show_status_icon: bool,
-    ) {
-        self.state.observe(decision, muted, is_show_status_icon);
-    }
-
-    pub fn clear_on_status_icon_hidden(&mut self) {
-        self.state.observe(None, false, false);
+    pub fn observe(&mut self, decision: Option<NotificationDecision>, muted: bool) {
+        self.state.observe(decision, muted);
     }
 
     pub fn bootstrap<S: NotifierReadySink>(&self, sink: S) {
@@ -93,15 +79,11 @@ impl NotificationService {
         }
     }
 
-    pub fn finish_bootstrap(
-        &mut self,
-        result: Result<MacNotifier, String>,
-        is_show_status_icon: bool,
-    ) {
+    pub fn finish_bootstrap(&mut self, result: Result<MacNotifier, String>) {
         match result {
             Ok(notifier) => self.notifier = Some(notifier),
             Err(error) => {
-                self.state.observe(None, false, is_show_status_icon);
+                self.state.observe(None, false);
                 log::warn!("notification authorization unavailable: {error}");
             }
         }

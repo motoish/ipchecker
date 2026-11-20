@@ -7,6 +7,8 @@ menu.show_network_speed: Afficher le débit
 menu.show_network_latency: Afficher la latence réseau
 menu.show_status_icon: Afficher l'icône d'état
 menu.daily_ip_log: Enregistrer l’IP publique quotidienne
+menu.daily_ip_log_menu: Journal IP quotidien
+menu.menu_bar: Barre des menus
 menu.daily_ip_log_include_vpn_addresses: Enregistrer les adresses VPN
 menu.change_daily_ip_log_directory: Modifier le dossier de sortie du journal…
 menu.mute_session: Ne plus notifier cette session
@@ -16,7 +18,16 @@ menu.quit: Quitter
 menu.latency_mode: Mode de latence
 status.current_ip: "IP publique actuelle : %{ip}"
 status.last_success_ip: "Dernière IP publique : %{ip}"
+status.copy_current_ip: "Copier l’IP publique actuelle : %{ip}"
+status.copy_last_ip: "Copier la dernière IP publique : %{ip}"
 status.expected_ip: "IP attendue : %{ip}"
+status.label: État
+status.matches: Correspond à l’IP attendue
+status.mismatch: Ne correspond pas à l’IP attendue
+status.not_configured: IP attendue non définie
+status.unreachable: Vérification impossible
+status.checked: "Vérifié à %{time}"
+status.muted: En sourdine
 status.unknown: Inconnue
 status.unset: Non définie
 status.tooltip: "Actuelle : %{current} | Attendue : %{expected}"
