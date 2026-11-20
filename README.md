@@ -46,7 +46,7 @@ Configuration is stored at:
 ~/Library/Application Support/ipchecker/config.toml
 ```
 
-The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon`. Network metrics are off by default; the status icon is on. At least one of the three must remain enabled so the menu bar entry stays accessible. Notifications follow the mute setting and do not depend on the status icon being visible.
+The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon`. New installations start with network metrics off and the status icon on. Config files that omit the two metric keys keep the previous enabled behavior, so upgrades do not silently hide the metrics; set them to `false` to switch to the icon-only layout. At least one of the three must remain enabled so the menu bar entry stays accessible. Notifications follow the mute setting and do not depend on the status icon being visible.
 
 The latency mode defaults to **ICMP ping to `1.1.1.1`**, sampled continuously every five seconds while latency display is enabled. The **Latency Mode** submenu also offers **TCP connect to `1.1.1.1:443`**. The choice is saved as `latency_mode = "icmp"` or `"tcp"`; switching modes clears the previous average and starts a new probe immediately. TCP is also sampled every five seconds; network speed still refreshes every second. Both modes follow system routing. Measured latency is shown in milliseconds; a green, yellow, or red dot reflects under 100 ms, under 300 ms, or 300 ms and above. If no sample is available, the column shows `—`.
 
