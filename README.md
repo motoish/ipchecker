@@ -35,9 +35,8 @@ Open the menu bar icon to:
 - enter or paste an expected IPv4 address
 - use the current IP as the expected address
 - change the check interval or check immediately
-- show or hide live upload/download rates
-- record daily public IP addresses and choose the log output folder
-- include or exclude VPN addresses from future log entries
+- under **Menu Bar**, show or hide the status icon, latency, and live upload/download rates
+- under **Daily IP Log**, record daily public IP addresses, choose the output folder, and include or exclude VPN addresses
 - mute notifications for the current session
 - check for updates, download and verify the latest app, then reveal it in Finder for manual replacement
 
@@ -47,9 +46,9 @@ Configuration is stored at:
 ~/Library/Application Support/ipchecker/config.toml
 ```
 
-The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon` (all default `true`). At least one of the three must remain enabled so the menu bar entry stays accessible. Hiding the status icon also disables all public-IP check notifications, including mismatch and fetch-failure notifications.
+The network-speed, network-latency, and status-icon menu toggles are saved there as `show_network_speed`, `show_network_latency`, and `show_status_icon`. Network metrics are off by default; the status icon is on. At least one of the three must remain enabled so the menu bar entry stays accessible. Notifications follow the mute setting and do not depend on the status icon being visible.
 
-Latency defaults to **ICMP ping to `1.1.1.1`**, sampled continuously every five seconds. The **Latency Mode** submenu also offers **TCP connect to `1.1.1.1:443`** and shows the selected method and target. The choice is saved as `latency_mode = "icmp"` or `"tcp"`; switching modes clears the previous average and starts a new probe immediately. TCP is also sampled every five seconds; network speed still refreshes every second. Both modes follow system routing.
+The latency mode defaults to **ICMP ping to `1.1.1.1`**, sampled continuously every five seconds while latency display is enabled. The **Latency Mode** submenu also offers **TCP connect to `1.1.1.1:443`**. The choice is saved as `latency_mode = "icmp"` or `"tcp"`; switching modes clears the previous average and starts a new probe immediately. TCP is also sampled every five seconds; network speed still refreshes every second. Both modes follow system routing. Measured latency is shown in milliseconds; a green, yellow, or red dot reflects under 100 ms, under 300 ms, or 300 ms and above. If no sample is available, the column shows `—`.
 
 Daily IP logging is off by default. When enabled, choose an output folder and ipchecker creates `ipchecker-daily-global-ip-log-YYYY-MM.csv`. Enabling the log, or changing its output folder while enabled, triggers an immediate public IP check. Each date has one row; multiple addresses observed on the same day are separated with `;`. **Record VPN Addresses** defaults to on. Turn it off to skip observations if an active VPN tunnel carries IPv4 routes before or after the IP request, or if either VPN check fails. Brief VPN connections entirely between these checks may go undetected. Existing CSV entries are never changed.
 
