@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::{Read, Write},
+    io::{self, Read, Write},
     net::TcpListener,
     thread,
 };
@@ -26,15 +26,30 @@ fn serve_once(body: Vec<u8>) -> (String, thread::JoinHandle<()>) {
         let (mut stream, _) = listener.accept().unwrap();
         let mut request = [0u8; 1024];
         let _ = stream.read(&mut request).unwrap();
-        write!(
-            stream,
+        let header = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             body.len()
-        )
-        .unwrap();
-        stream.write_all(&body).unwrap();
+        );
+        // Clients may close after a Content-Length check without reading the
+        // body; treat peer disconnect as success for this one-shot fixture.
+        write_ignoring_disconnect(&mut stream, header.as_bytes()).unwrap();
+        write_ignoring_disconnect(&mut stream, &body).unwrap();
     });
     (format!("http://{address}/update.json"), handle)
+}
+
+fn write_ignoring_disconnect(stream: &mut impl Write, bytes: &[u8]) -> io::Result<()> {
+    match stream.write_all(bytes) {
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+            ) =>
+        {
+            Ok(())
+        }
+        other => other,
+    }
 }
 
 #[test]
