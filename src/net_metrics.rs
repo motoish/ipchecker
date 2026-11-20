@@ -70,7 +70,7 @@ impl SharedSamplingState {
 
     fn set_sampling(&self, sampling: NetworkMetricsSampling) {
         self.speed_state
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |state| {
                 ((state & 1 != 0) != sampling.is_show_network_speed).then(|| {
                     ((state & !1).wrapping_add(2)) | usize::from(sampling.is_show_network_speed)
                 })

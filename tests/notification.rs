@@ -2,7 +2,8 @@ use std::{net::Ipv4Addr, time::Duration};
 
 use ipchecker::{
     app::NotificationCoordinator,
-    monitor::NotificationDecision,
+    config::Config,
+    monitor::{Monitor, NotificationDecision},
     notification::{
         ActionSink, AuthorizationResolution, AuthorizationState, NotificationAction,
         NotificationActionSpec, NotificationResponseKind, action_for_response, content_for,
@@ -67,6 +68,31 @@ fn muting_clears_the_active_notification_episode() {
     coordinator.observe(Some(NotificationDecision::FetchFailure), true);
 
     assert_eq!(coordinator.pending(), None);
+}
+
+#[test]
+fn hidden_status_icon_still_queues_mismatch_notifications() {
+    let config = Config {
+        is_show_status_icon: false,
+        is_show_network_speed: true,
+        ..Config::default()
+    };
+    assert!(!config.is_show_status_icon);
+
+    let current = ip("192.0.2.1");
+    let expected_ip = ip("192.0.2.2");
+    let expected = NotificationDecision::Mismatch {
+        current,
+        expected: expected_ip,
+    };
+    let outcome = Monitor::default().apply(Ok(current), Some(expected_ip), false);
+    assert_eq!(outcome.notification, Some(expected.clone()));
+
+    // NotificationCoordinators no longer receive the icon visibility, so a
+    // hidden status icon must not clear an otherwise valid mismatch.
+    let mut coordinator = NotificationCoordinator::default();
+    coordinator.observe(outcome.notification, false);
+    assert_eq!(coordinator.pending(), Some(expected));
 }
 
 fn assert_send_sync_static<T: Send + Sync + 'static>() {}

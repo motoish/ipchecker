@@ -204,14 +204,17 @@ impl TrayUi {
             #[cfg(target_os = "macos")]
             speed_title_view,
         };
+        // Run the normal apply path once so gated items (latency mode, daily
+        // log sub-options) start in the correct enabled state before the first
+        // fetch. `set_network_speed` stays last so it owns the custom view and
+        // its icon handoff.
+        ui.apply(model)?;
         ui.set_network_speed(
             &NetworkSpeedLabels::unknown(),
             model.is_show_network_speed,
             model.is_show_network_latency,
             model.is_show_status_icon,
         );
-        #[cfg(target_os = "macos")]
-        set_tray_accessibility_label(&ui.tray, &model.accessibility_label);
         Ok(ui)
     }
 

@@ -52,29 +52,29 @@ fn vpn_log_preference_can_be_disabled() {
 }
 
 #[test]
-fn missing_show_network_speed_defaults_to_disabled() {
-    let config = Config::from_toml("interval_minutes = 15\n");
-    assert!(!config.is_show_network_speed);
-    assert_eq!(config.interval_minutes, 15);
+fn new_install_defaults_differ_from_legacy_missing_keys() {
+    assert!(!Config::default().is_show_network_speed);
+    assert!(!Config::default().is_show_network_latency);
+
+    // A config written before these keys existed must not silently hide the
+    // metrics after an upgrade.
+    let legacy = Config::from_toml("interval_minutes = 15\n");
+    assert!(legacy.is_show_network_speed);
+    assert!(legacy.is_show_network_latency);
+    assert_eq!(legacy.interval_minutes, 15);
 }
 
 #[test]
-fn invalid_show_network_speed_recovers_to_disabled() {
+fn invalid_show_network_speed_recovers_to_enabled() {
     let config = Config::from_toml("show_network_speed = \"nope\"\ninterval_minutes = 30\n");
-    assert!(!config.is_show_network_speed);
+    assert!(config.is_show_network_speed);
     assert_eq!(config.interval_minutes, 30);
 }
 
 #[test]
-fn missing_show_network_latency_defaults_to_disabled() {
-    let config = Config::from_toml("interval_minutes = 15\n");
-    assert!(!config.is_show_network_latency);
-}
-
-#[test]
-fn invalid_show_network_latency_recovers_to_disabled() {
+fn invalid_show_network_latency_recovers_to_enabled() {
     let config = Config::from_toml("show_network_latency = \"nope\"\ninterval_minutes = 30\n");
-    assert!(!config.is_show_network_latency);
+    assert!(config.is_show_network_latency);
     assert_eq!(config.interval_minutes, 30);
 }
 

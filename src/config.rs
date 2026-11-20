@@ -160,8 +160,11 @@ impl Config {
                 .interval_minutes
                 .filter(|value| ALLOWED_INTERVAL_MINUTES.contains(value))
                 .unwrap_or(5),
-            is_show_network_speed: raw.show_network_speed.unwrap_or(false),
-            is_show_network_latency: raw.show_network_latency.unwrap_or(false),
+            // Keep legacy configs (keys absent) on the previous enabled
+            // behavior. `Config::default()` still gives new installations the
+            // compact icon-only layout.
+            is_show_network_speed: raw.show_network_speed.unwrap_or(true),
+            is_show_network_latency: raw.show_network_latency.unwrap_or(true),
             is_show_status_icon: raw.show_status_icon.unwrap_or(true),
             is_daily_ip_log_enabled: raw.daily_ip_log_enabled.unwrap_or(false)
                 && daily_ip_log_directory.is_some(),
