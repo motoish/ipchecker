@@ -2,7 +2,7 @@
 name = "ipchecker"
 version = "2026.11.10-39b141c3"
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.95"
 license = "BSD-3-Clause"
 
 [dependencies]
