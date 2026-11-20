@@ -48,7 +48,7 @@ dependencies:
             - 'actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
     'dtolnay/rust-toolchain@1.97.1':
         ref: '1.97.1'
-        commit: 'sha1-59a558e8c538bf4a23bbffa19e5a278b703f2920'
+        commit: 'sha1-766a42937d994bd78bb4591385445c188ccb3f09'
         owner_id: 1940490
         repo_id: 260749683
     'motoish/calver-release-action@v1.1.4':
