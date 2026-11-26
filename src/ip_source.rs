@@ -1,4 +1,7 @@
-use std::{net::Ipv4Addr, time::Duration};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    time::Duration,
+};
 
 pub const PUBLIC_IP_URLS: [&str; 3] = [
     "https://api.ipify.org",
@@ -112,6 +115,10 @@ impl ReqwestTextClient {
     pub fn new() -> Result<Self, reqwest::Error> {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(8))
+            // Public-IP checks target IPv4 addresses only. On dual-stack
+            // networks, fallback sources like ifconfig.me and icanhazip.com
+            // advertise AAAA records and would otherwise return IPv6.
+            .local_address(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
             // Public-IP checks must not reuse TCP connections across polls.
             // After a VPN connects, pooled keep-alive sockets can still egress on
             // the pre-VPN route while browsers open fresh connections.

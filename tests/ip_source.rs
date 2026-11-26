@@ -180,3 +180,22 @@ fn reqwest_client_opens_a_fresh_tcp_connection_for_each_request() {
         "each public-IP poll must open a new TCP connection"
     );
 }
+
+#[test]
+fn reqwest_client_does_not_connect_over_ipv6() {
+    let listener = TcpListener::bind("[::1]:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let address = listener.local_addr().unwrap();
+    let url = format!("http://{address}/");
+
+    let mut client = ReqwestTextClient::new().unwrap();
+    assert!(
+        client.get_text(&url).is_err(),
+        "IPv4-only public-IP client must not connect to IPv6 endpoints"
+    );
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock,
+        "IPv6 listener must not receive a connection"
+    );
+}
