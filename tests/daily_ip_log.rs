@@ -1,9 +1,14 @@
-use std::{fs, net::Ipv4Addr};
+use std::{
+    fs,
+    net::Ipv4Addr,
+    path::{Path, PathBuf},
+    sync::mpsc::{self, Sender},
+};
 
 use chrono::NaiveDate;
 use ipchecker::daily_ip_log::{
-    DailyIpLogEvent, DailyIpLogEventSink, DailyIpLogHandle, DailyIpLogWorkerClosed, RecordOutcome,
-    record_public_ip,
+    DailyIpLogAlertState, DailyIpLogEvent, DailyIpLogEventSink, DailyIpLogHandle,
+    DailyIpLogWorkerClosed, RecordOutcome, record_public_ip,
 };
 
 #[derive(Clone)]
@@ -12,6 +17,17 @@ struct IgnoredEventSink;
 impl DailyIpLogEventSink for IgnoredEventSink {
     fn send(&self, _event: DailyIpLogEvent) -> Result<(), DailyIpLogWorkerClosed> {
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct ChannelEventSink {
+    sender: Sender<DailyIpLogEvent>,
+}
+
+impl DailyIpLogEventSink for ChannelEventSink {
+    fn send(&self, event: DailyIpLogEvent) -> Result<(), DailyIpLogWorkerClosed> {
+        self.sender.send(event).map_err(|_| DailyIpLogWorkerClosed)
     }
 }
 
@@ -195,4 +211,92 @@ fn worker_drains_queued_records_before_shutdown() {
         .expect("read worker output"),
         "date,ips\n2026-09-01,\"203.0.113.10;198.51.100.20\"\n"
     );
+}
+
+#[test]
+fn worker_reports_recorded_and_failed_events_with_directory() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let date = NaiveDate::from_ymd_opt(2026, 9, 1).expect("valid date");
+    let missing_directory = directory.path().join("missing");
+    let (sender, events) = mpsc::channel();
+    let worker = DailyIpLogHandle::start(ChannelEventSink { sender });
+
+    worker
+        .record(
+            directory.path().to_owned(),
+            date,
+            Ipv4Addr::new(203, 0, 113, 10),
+        )
+        .expect("queue first IP");
+    worker
+        .record(
+            directory.path().to_owned(),
+            date,
+            Ipv4Addr::new(203, 0, 113, 10),
+        )
+        .expect("queue duplicate IP");
+    worker
+        .record(
+            missing_directory.clone(),
+            date,
+            Ipv4Addr::new(203, 0, 113, 10),
+        )
+        .expect("queue failing write");
+    drop(worker);
+
+    let received: Vec<_> = events.into_iter().collect();
+    assert_eq!(received.len(), 3);
+    assert_eq!(
+        received[0],
+        DailyIpLogEvent::Recorded {
+            directory: directory.path().to_owned(),
+            outcome: RecordOutcome::Written,
+        }
+    );
+    assert_eq!(
+        received[1],
+        DailyIpLogEvent::Recorded {
+            directory: directory.path().to_owned(),
+            outcome: RecordOutcome::Unchanged,
+        }
+    );
+    assert!(matches!(
+        &received[2],
+        DailyIpLogEvent::Failed { directory, .. } if directory == &missing_directory
+    ));
+}
+
+#[test]
+fn alert_state_resets_after_success_or_explicit_reset_and_ignores_stale_events() {
+    let first_dir = PathBuf::from("/tmp/ipchecker-first");
+    let second_dir = PathBuf::from("/tmp/ipchecker-second");
+    let first_failure = DailyIpLogEvent::Failed {
+        directory: first_dir.clone(),
+        error: "permission denied".to_owned(),
+    };
+    let first_success = DailyIpLogEvent::Recorded {
+        directory: first_dir.clone(),
+        outcome: RecordOutcome::Written,
+    };
+    let second_failure = DailyIpLogEvent::Failed {
+        directory: second_dir.clone(),
+        error: "permission denied".to_owned(),
+    };
+
+    let mut state = DailyIpLogAlertState::default();
+
+    // First failure alerts once; repeated failures stay suppressed.
+    assert!(state.observe(&first_failure, true, Some(Path::new(&first_dir))));
+    assert!(!state.observe(&first_failure, true, Some(Path::new(&first_dir))));
+
+    // Recovery via a successful write re-arms the alert for a future failure.
+    assert!(!state.observe(&first_success, true, Some(Path::new(&first_dir))));
+    assert!(state.observe(&first_failure, true, Some(Path::new(&first_dir))));
+
+    // Explicit reset (directory change / re-enable) re-arms the alert while
+    // ignoring stale failures from the previous directory or while disabled.
+    state.reset();
+    assert!(!state.observe(&first_failure, true, Some(Path::new(&second_dir))));
+    assert!(!state.observe(&second_failure, false, Some(Path::new(&second_dir))));
+    assert!(state.observe(&second_failure, true, Some(Path::new(&second_dir))));
 }

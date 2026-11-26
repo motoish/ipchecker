@@ -12,7 +12,8 @@ mod macos {
         },
         config::{Config, ConfigStore, TrayDisplayField},
         daily_ip_log::{
-            DailyIpLogEvent, DailyIpLogEventSink, DailyIpLogHandle, DailyIpLogWorkerClosed,
+            DailyIpLogAlertState, DailyIpLogEvent, DailyIpLogEventSink, DailyIpLogHandle,
+            DailyIpLogWorkerClosed,
         },
         daily_ip_log_ui::{choose_daily_ip_log_directory, show_daily_ip_log_error},
         i18n,
@@ -150,7 +151,7 @@ mod macos {
         worker: Option<WorkerHandle>,
         network_metrics: Option<NetworkMetricsHandle>,
         daily_ip_log: Option<DailyIpLogHandle>,
-        daily_ip_log_error_shown: bool,
+        daily_ip_log_alert: DailyIpLogAlertState,
         feedback_restore: FeedbackRestoreGuard,
         /// Retained so Edit key equivalents stay registered for dialogs.
         app_edit_menu: Option<Menu>,
@@ -180,7 +181,7 @@ mod macos {
                 worker: None,
                 network_metrics: None,
                 daily_ip_log: None,
-                daily_ip_log_error_shown: false,
+                daily_ip_log_alert: DailyIpLogAlertState::default(),
                 feedback_restore: FeedbackRestoreGuard::default(),
                 app_edit_menu: None,
                 speed_labels: NetworkSpeedLabels::unknown(),
@@ -283,10 +284,15 @@ mod macos {
                     self.speed_labels = labels;
                     self.apply_network_speed();
                 }
-                UserEvent::DailyIpLog(DailyIpLogEvent::Failed(error)) => {
-                    log::warn!("failed to record daily public IP: {error}");
-                    if !self.daily_ip_log_error_shown {
-                        self.daily_ip_log_error_shown = true;
+                UserEvent::DailyIpLog(event) => {
+                    if let DailyIpLogEvent::Failed { error, .. } = &event {
+                        log::warn!("failed to record daily public IP: {error}");
+                    }
+                    if self.daily_ip_log_alert.observe(
+                        &event,
+                        self.config.is_daily_ip_log_enabled,
+                        self.config.daily_ip_log_directory.as_deref(),
+                    ) {
                         show_daily_ip_log_error();
                     }
                 }
@@ -467,8 +473,11 @@ mod macos {
                 candidate.daily_ip_log_directory = Some(directory);
             }
             candidate.is_daily_ip_log_enabled = enabled;
-            if self.save_candidate(candidate) && enabled {
-                self.send_worker_command(WorkerCommand::CheckNow);
+            if self.save_candidate(candidate) {
+                self.daily_ip_log_alert.reset();
+                if enabled {
+                    self.send_worker_command(WorkerCommand::CheckNow);
+                }
             }
             self.apply_ui();
         }
@@ -480,8 +489,11 @@ mod macos {
             let mut candidate = self.config.clone();
             candidate.daily_ip_log_directory = Some(directory);
             let should_check = candidate.is_daily_ip_log_enabled;
-            if self.save_candidate(candidate) && should_check {
-                self.send_worker_command(WorkerCommand::CheckNow);
+            if self.save_candidate(candidate) {
+                self.daily_ip_log_alert.reset();
+                if should_check {
+                    self.send_worker_command(WorkerCommand::CheckNow);
+                }
             }
             self.apply_ui();
         }

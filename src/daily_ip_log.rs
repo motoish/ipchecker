@@ -20,7 +20,55 @@ pub enum RecordOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DailyIpLogEvent {
-    Failed(String),
+    Recorded {
+        directory: PathBuf,
+        outcome: RecordOutcome,
+    },
+    Failed {
+        directory: PathBuf,
+        error: String,
+    },
+}
+
+impl DailyIpLogEvent {
+    pub fn directory(&self) -> &Path {
+        match self {
+            Self::Recorded { directory, .. } | Self::Failed { directory, .. } => directory,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct DailyIpLogAlertState {
+    error_shown: bool,
+}
+
+impl DailyIpLogAlertState {
+    pub fn observe(
+        &mut self,
+        event: &DailyIpLogEvent,
+        is_enabled: bool,
+        active_directory: Option<&Path>,
+    ) -> bool {
+        if !is_enabled || active_directory != Some(event.directory()) {
+            return false;
+        }
+        match event {
+            DailyIpLogEvent::Recorded { .. } => {
+                self.error_shown = false;
+                false
+            }
+            DailyIpLogEvent::Failed { .. } => {
+                let should_alert = !self.error_shown;
+                self.error_shown = true;
+                should_alert
+            }
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.error_shown = false;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -58,13 +106,16 @@ impl DailyIpLogHandle {
                             date,
                             ip,
                         } => {
-                            if let Err(error) = record_public_ip(&directory, date, ip)
-                                && sink
-                                    .send(DailyIpLogEvent::Failed(error.to_string()))
-                                    .is_err()
-                            {
+                            let event = match record_public_ip(&directory, date, ip) {
+                                Ok(outcome) => DailyIpLogEvent::Recorded { directory, outcome },
+                                Err(error) => DailyIpLogEvent::Failed {
+                                    directory,
+                                    error: error.to_string(),
+                                },
+                            };
+                            if sink.send(event).is_err() {
                                 log::debug!(
-                                    "daily IP log error arrived after the event sink closed"
+                                    "daily IP log event arrived after the event sink closed"
                                 );
                             }
                         }
