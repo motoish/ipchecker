@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.11.27-ecde0c09
+
+### Bug Fixes
+
+- *(ip-source)* Force IPv4 transport for public IP checks by @motoish
+- *(daily-ip-log)* Reset error alert state after recovery or config changes by @motoish
+- *(vpn-detection)* Retry sysctl route dump on ENOMEM by @motoish
+
 ## 2026.11.20-5725d9ee
 
 ### Bug Fixes
