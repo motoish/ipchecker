@@ -131,6 +131,35 @@ fn active_interfaces() -> std::io::Result<Vec<InterfaceSnapshot>> {
 }
 
 #[cfg(target_os = "macos")]
+fn read_sysctl_with_retry<F>(mut call: F) -> std::io::Result<Vec<u8>>
+where
+    F: FnMut(Option<&mut [u8]>) -> std::io::Result<usize>,
+{
+    const MAX_ATTEMPTS: usize = 3;
+
+    let mut bytes = Vec::new();
+    let mut last_error = None;
+    for _ in 0..MAX_ATTEMPTS {
+        let length = call(None)?;
+        if length == 0 {
+            return Ok(Vec::new());
+        }
+        bytes.resize(length, 0);
+        match call(Some(&mut bytes)) {
+            Ok(written) => {
+                bytes.truncate(written);
+                return Ok(bytes);
+            }
+            Err(error) if error.raw_os_error() == Some(libc::ENOMEM) => {
+                last_error = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_error.expect("retry loop runs at least once"))
+}
+
+#[cfg(target_os = "macos")]
 fn ipv4_route_interface_indices() -> std::io::Result<Vec<u32>> {
     use std::{io, ptr};
 
@@ -143,36 +172,26 @@ fn ipv4_route_interface_indices() -> std::io::Result<Vec<u32>> {
         NET_RT_DUMP2,
         0,
     ];
-    let mut length = 0;
-    if unsafe {
-        libc::sysctl(
-            mib.as_mut_ptr(),
-            mib.len() as libc::c_uint,
-            ptr::null_mut(),
-            &mut length,
-            ptr::null_mut(),
-            0,
-        )
-    } != 0
-    {
-        return Err(io::Error::last_os_error());
-    }
-
-    let mut bytes = vec![0_u8; length];
-    if unsafe {
-        libc::sysctl(
-            mib.as_mut_ptr(),
-            mib.len() as libc::c_uint,
-            bytes.as_mut_ptr().cast(),
-            &mut length,
-            ptr::null_mut(),
-            0,
-        )
-    } != 0
-    {
-        return Err(io::Error::last_os_error());
-    }
-    bytes.truncate(length);
+    let bytes = read_sysctl_with_retry(|buffer| {
+        let (data_ptr, mut length) = match buffer {
+            Some(slice) => (slice.as_mut_ptr().cast(), slice.len()),
+            None => (ptr::null_mut(), 0),
+        };
+        if unsafe {
+            libc::sysctl(
+                mib.as_mut_ptr(),
+                mib.len() as libc::c_uint,
+                data_ptr,
+                &mut length,
+                ptr::null_mut(),
+                0,
+            )
+        } != 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(length)
+    })?;
     parse_route_interface_indices(&bytes)
 }
 
@@ -215,9 +234,9 @@ fn parse_route_interface_indices(bytes: &[u8]) -> std::io::Result<Vec<u32>> {
 
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
-    use std::{mem, slice};
+    use std::{io, mem, slice};
 
-    use super::parse_route_interface_indices;
+    use super::{parse_route_interface_indices, read_sysctl_with_retry};
 
     fn route_message(index: u16, flags: i32) -> Vec<u8> {
         let mut header: libc::rt_msghdr2 = unsafe { mem::zeroed() };
@@ -240,5 +259,83 @@ mod tests {
         bytes.extend(route_message(41, 0));
 
         assert_eq!(parse_route_interface_indices(&bytes).unwrap(), vec![40]);
+    }
+
+    #[test]
+    fn sysctl_retry_recovers_after_enomem_when_route_table_grows() {
+        let payload = route_message(40, libc::RTF_UP);
+        let mut read_attempts = 0;
+
+        let bytes = read_sysctl_with_retry(|buffer| match buffer {
+            None => Ok(if read_attempts == 0 {
+                payload.len() / 2
+            } else {
+                payload.len() + 16
+            }),
+            Some(slice) => {
+                read_attempts += 1;
+                if read_attempts == 1 {
+                    Err(io::Error::from_raw_os_error(libc::ENOMEM))
+                } else {
+                    slice[..payload.len()].copy_from_slice(&payload);
+                    Ok(payload.len())
+                }
+            }
+        })
+        .unwrap();
+
+        assert_eq!(read_attempts, 2);
+        assert_eq!(bytes, payload);
+    }
+
+    #[test]
+    fn sysctl_retry_fails_immediately_on_non_enomem_error() {
+        let mut read_attempts = 0;
+
+        let error = read_sysctl_with_retry(|buffer| match buffer {
+            None => Ok(32),
+            Some(_) => {
+                read_attempts += 1;
+                Err(io::Error::from_raw_os_error(libc::EPERM))
+            }
+        })
+        .unwrap_err();
+
+        assert_eq!(read_attempts, 1);
+        assert_eq!(error.raw_os_error(), Some(libc::EPERM));
+    }
+
+    #[test]
+    fn sysctl_retry_stops_after_exhausting_enomem_attempts() {
+        let mut read_attempts = 0;
+
+        let error = read_sysctl_with_retry(|buffer| match buffer {
+            None => Ok(32),
+            Some(_) => {
+                read_attempts += 1;
+                Err(io::Error::from_raw_os_error(libc::ENOMEM))
+            }
+        })
+        .unwrap_err();
+
+        assert_eq!(read_attempts, 3);
+        assert_eq!(error.raw_os_error(), Some(libc::ENOMEM));
+    }
+
+    #[test]
+    fn sysctl_retry_returns_empty_without_reading_when_length_is_zero() {
+        let mut read_called = false;
+
+        let bytes = read_sysctl_with_retry(|buffer| match buffer {
+            None => Ok(0),
+            Some(_) => {
+                read_called = true;
+                Ok(0)
+            }
+        })
+        .unwrap();
+
+        assert!(bytes.is_empty());
+        assert!(!read_called);
     }
 }
